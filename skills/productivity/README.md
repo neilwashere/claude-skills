@@ -12,4 +12,4 @@ _No skills yet._
 
 Model- or user-reachable (rich trigger phrasing so the model can reach for them).
 
-_No skills yet._
+- **[grilling](./grilling/SKILL.md)** — Interview the user relentlessly about a plan or design until every branch of the decision tree is resolved. (Used by `grill-with-docs`.)

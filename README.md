@@ -35,6 +35,12 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 - **[enter-worktree](./skills/engineering/enter-worktree/SKILL.md)** — Create or enter a sibling git worktree before writing a feature's spec, plan, or code.
 - **[exit-worktree](./skills/engineering/exit-worktree/SKILL.md)** — Remove a feature's worktree after its PR merges.
 
+### Productivity
+
+**Model-invoked**
+
+- **[grilling](./skills/productivity/grilling/SKILL.md)** — Interview the user relentlessly about a plan or design until every branch of the decision tree is resolved. (Used by `grill-with-docs`.)
+
 ### Subsystems
 
 A self-contained system that ships plugin-level hooks and commands. It lives outside the buckets at `skills/continuous-learning-v2/` so its hook paths stay stable — see [CLAUDE.md](./CLAUDE.md).

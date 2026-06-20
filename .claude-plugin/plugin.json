@@ -15,6 +15,7 @@
     "./skills/engineering/enforcing-worktree-discipline",
     "./skills/engineering/enter-worktree",
     "./skills/engineering/exit-worktree",
+    "./skills/productivity/grilling",
     "./skills/continuous-learning-v2"
   ],
   "commands": "./commands",
