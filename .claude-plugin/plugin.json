@@ -1,8 +1,22 @@
 {
   "name": "threadsafe",
-  "description": "Neil's personal Claude Code skills — engineering and productivity workflows, namespaced as threadsafe:<skill>.",
+  "description": "Neil's personal Claude Code skills — engineering workflows plus the instincts session-learning subsystem, namespaced as threadsafe:<skill>.",
   "author": {
     "name": "Neil Chambers"
   },
-  "skills": []
+  "skills": [
+    "./skills/engineering/tdd",
+    "./skills/engineering/diagnosing-bugs",
+    "./skills/engineering/codebase-design",
+    "./skills/engineering/domain-modeling",
+    "./skills/engineering/grill-with-docs",
+    "./skills/engineering/adversarial-review",
+    "./skills/engineering/address-pr-comments",
+    "./skills/engineering/enforcing-worktree-discipline",
+    "./skills/engineering/enter-worktree",
+    "./skills/engineering/exit-worktree",
+    "./skills/continuous-learning-v2"
+  ],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json"
 }

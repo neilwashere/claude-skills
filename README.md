@@ -1,8 +1,8 @@
 # Threadsafe Skills
 
-My personal Claude Code skills — engineering and productivity workflows I use day to day.
+My personal Claude Code skills — engineering workflows I use day to day, plus the **instincts** session-learning subsystem.
 
-This repo is a **single plugin** named `threadsafe`, so every skill invokes as `threadsafe:<skill>` (e.g. `threadsafe:tdd`, `threadsafe:review`). Skills are small, composable, and meant to be hacked on.
+This repo is a **single plugin** named `threadsafe`, so every skill invokes as `threadsafe:<skill>` (e.g. `threadsafe:tdd`, `threadsafe:adversarial-review`). Skills are small, composable, and meant to be hacked on.
 
 ## Install
 
@@ -19,12 +19,24 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 
 ### Engineering
 
-_No skills yet._
+**User-invoked**
 
-### Productivity
+- **[grill-with-docs](./skills/engineering/grill-with-docs/SKILL.md)** — A relentless interview to sharpen a plan or design that also writes the docs (ADRs and a glossary) as you go.
 
-_No skills yet._
+**Model-invoked**
 
-### Misc
+- **[tdd](./skills/engineering/tdd/SKILL.md)** — Test-driven development, red-green-refactor; build features or fix bugs test-first.
+- **[diagnosing-bugs](./skills/engineering/diagnosing-bugs/SKILL.md)** — Disciplined diagnosis loop for hard bugs and performance regressions.
+- **[codebase-design](./skills/engineering/codebase-design/SKILL.md)** — Shared vocabulary for designing deep modules: small interfaces, clean seams, testable code.
+- **[domain-modeling](./skills/engineering/domain-modeling/SKILL.md)** — Build and sharpen a project's domain model; record decisions as ADRs and a glossary.
+- **[adversarial-review](./skills/engineering/adversarial-review/SKILL.md)** — Pre-landing PR review: parallel specialists hunt structural issues tests miss.
+- **[address-pr-comments](./skills/engineering/address-pr-comments/SKILL.md)** — Triage and address PR review comments: fix, commit, push, reply inline.
+- **[enforcing-worktree-discipline](./skills/engineering/enforcing-worktree-discipline/SKILL.md)** — Install a PreToolUse hook that blocks branching/cherry-pick in the main repo dir, forcing feature work into worktrees.
+- **[enter-worktree](./skills/engineering/enter-worktree/SKILL.md)** — Create or enter a sibling git worktree before writing a feature's spec, plan, or code.
+- **[exit-worktree](./skills/engineering/exit-worktree/SKILL.md)** — Remove a feature's worktree after its PR merges.
 
-_No skills yet._
+### Subsystems
+
+A self-contained system that ships plugin-level hooks and commands. It lives outside the buckets at `skills/continuous-learning-v2/` so its hook paths stay stable — see [CLAUDE.md](./CLAUDE.md).
+
+- **[continuous-learning-v2](./skills/continuous-learning-v2/SKILL.md)** (instincts) — Session-learning loop: hooks observe tool use and inject high-confidence instincts at session start. Managed by the `/evolve`, `/promote`, `/prune`, `/instinct-status`, `/instinct-import`, `/instinct-export`, and `/projects` commands (all `threadsafe:`-namespaced). Shares instinct data (`~/.local/share/ecc-homunculus`) with any prior ECC/Emerge install.
