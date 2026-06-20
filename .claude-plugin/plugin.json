@@ -12,9 +12,9 @@
     "./skills/engineering/grill-with-docs",
     "./skills/engineering/adversarial-review",
     "./skills/engineering/address-pr-comments",
-    "./skills/engineering/enforcing-worktree-discipline",
-    "./skills/engineering/enter-worktree",
-    "./skills/engineering/exit-worktree",
+    "./skills/engineering/setup-worktree-discipline",
+    "./skills/engineering/create-and-enter-worktree",
+    "./skills/engineering/exit-and-dispose-worktree",
     "./skills/productivity/grilling",
     "./skills/continuous-learning-v2"
   ],

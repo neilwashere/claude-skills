@@ -1,24 +1,25 @@
 #!/usr/bin/env bash
 #
-# wt-exit.sh - self-contained worktree removal for Skillet epics (the cleanup
-# tail, run only AFTER the epic's PR has merged).
+# wt-rm.sh - self-contained worktree removal (the cleanup tail, run only AFTER
+# the feature's PR has merged). Run from the main checkout, after you have left
+# the worktree session via ExitWorktree({action: "keep"}).
 #
-# Bundled into the exit-worktree skill so it needs NO `source ~/.zshrc`. Plain
-# bash, no chpwd hooks. Mirrors the `wt-rm` zsh helper: refuses to remove a
-# dirty or unpushed worktree unless --force, unlinks the Claude context, then
-# runs `git worktree remove`.
+# Bundled into the exit-and-dispose-worktree skill so it needs NO `source
+# ~/.zshrc`. Plain bash, no chpwd hooks. Mirrors the `wt-rm` zsh helper: refuses
+# to remove a dirty or unpushed worktree unless --force, unlinks the Claude
+# context, then runs `git worktree remove`.
 #
-# Usage: wt-exit.sh <branch-or-path> [--force]
+# Usage: wt-rm.sh <branch-or-path> [--force]
 set -euo pipefail
 
-target="${1:?usage: wt-exit.sh <branch-or-path> [--force]}"; shift || true
+target="${1:?usage: wt-rm.sh <branch-or-path> [--force]}"; shift || true
 force=0
 for a in "$@"; do [[ "$a" == "--force" || "$a" == "-f" ]] && force=1; done
 
 encode_path() { printf '%s' "$1" | tr '/.' '-'; }
 
 main_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
-[[ -n "$main_root" ]] || { echo "wt-exit: not inside a git repository" >&2; exit 1; }
+[[ -n "$main_root" ]] || { echo "wt-rm: not inside a git repository" >&2; exit 1; }
 
 # Resolve the worktree dir. Look up by BRANCH first: a branch name like
 # `spike/foo` can collide with a same-named relative dir once the worktree's
@@ -37,18 +38,18 @@ if [[ -z "$dir" ]]; then
     dir="${parent}/${repo}.worktrees/${branch//\//-}"
   fi
 fi
-[[ -d "$dir" ]] || { echo "wt-exit: no worktree at $dir" >&2; exit 1; }
+[[ -d "$dir" ]] || { echo "wt-rm: no worktree at $dir" >&2; exit 1; }
 
 # Safety gates (skip with --force).
 if (( ! force )); then
   if [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]; then
-    echo "wt-exit: '$dir' has uncommitted changes. Pass --force to remove anyway." >&2
+    echo "wt-rm: '$dir' has uncommitted changes. Pass --force to remove anyway." >&2
     git -C "$dir" status --short
     exit 1
   fi
   ahead="$(git -C "$dir" rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)"
   if [[ -n "$ahead" && "$ahead" != "0" ]]; then
-    echo "wt-exit: '$dir' has $ahead unpushed commit(s). Pass --force to remove anyway." >&2
+    echo "wt-rm: '$dir' has $ahead unpushed commit(s). Pass --force to remove anyway." >&2
     exit 1
   fi
 fi
