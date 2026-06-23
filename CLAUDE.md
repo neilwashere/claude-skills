@@ -1,4 +1,6 @@
-This repo is a **single Claude Code plugin** named `threadsafe`. Every skill here invokes as `threadsafe:<skill-name>` once the plugin is installed.
+This repo is a Claude Code **marketplace** hosting multiple plugins. `threadsafe` is the general catch-all plugin at the repo root (`source: "."`); its skills invoke as `threadsafe:<skill-name>`. Every **other** domain is its own plugin named `tss-<domain>` (e.g. `tss-git-skills`), living in a self-contained subtree `./tss-<domain>/` with a flat `skills/` and its own `README.md`; its skills invoke as `tss-<domain>:<skill-name>`.
+
+Why the subtree: Claude Code auto-scans each plugin's `skills/` at depth-1. Keeping every `tss-<domain>` plugin in its own subtree means the root `threadsafe` scan never reaches into it, so the two never collide. A flat `skills/` is auto-discovered, so a domain plugin's `plugin.json` needs no `skills` array (and no `hooks`/`commands` keys unless it ships plugin-level ones).
 
 Skills are organized into bucket folders under `skills/`:
 
@@ -9,7 +11,7 @@ Skills are organized into bucket folders under `skills/`:
 - `in-progress/` — drafts not yet ready to ship
 - `deprecated/` — no longer used
 
-Every skill in `engineering/`, `productivity/`, or `misc/` must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`. Skills in `personal/`, `in-progress/`, and `deprecated/` must not appear in either.
+Every skill in `engineering/`, `productivity/`, or `misc/` must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`. Skills in `personal/`, `in-progress/`, and `deprecated/` must not appear in either. These bucket rules apply to the `threadsafe` plugin only. A `tss-<domain>` plugin instead uses a flat `skills/` and lists its skills in its own `tss-<domain>/README.md` (no top-level README or threadsafe `plugin.json` entry).
 
 ## Subsystems (exception to the bucket rule)
 
