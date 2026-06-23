@@ -8,7 +8,7 @@ This repo is a Claude Code **marketplace** hosting a single plugin, `tss-git-ski
 
 ```bash
 /plugin marketplace add neilwashere/claude-skills
-/plugin install tss-git-skills@threadsafe
+/plugin install tss-git-skills@neilwashere
 ```
 
 For live, git-synced local development, point the marketplace at your checkout instead:

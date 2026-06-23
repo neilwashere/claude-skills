@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "threadsafe",
+  "name": "neilwashere",
   "description": "Curated git/worktree workflow skills for Claude Code.",
   "owner": {
     "name": "Neil Chambers",

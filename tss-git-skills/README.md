@@ -7,7 +7,7 @@ Curated git/worktree workflow skills. Every skill here invokes as
 
 ```bash
 /plugin marketplace add neilwashere/claude-skills
-/plugin install tss-git-skills@threadsafe
+/plugin install tss-git-skills@neilwashere
 ```
 
 ## Reference
