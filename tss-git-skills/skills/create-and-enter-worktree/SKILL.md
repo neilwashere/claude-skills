@@ -25,7 +25,7 @@ The design spec, the plan, the code, and the wrap-up docs are ALL authored in th
 **Step 1 — create (Bash, run from the main checkout).** Its stdout is *exactly* the worktree path; progress goes to stderr.
 
 ```
-bash /home/neil/code/threadsafe/claude-skills/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh <branch> [base]
+bash "${CLAUDE_PLUGIN_ROOT}/skills/create-and-enter-worktree/scripts/wt-new.sh" <branch> [base]
 ```
 
 `wt-new.sh` creates (or resumes) `<repo>.worktrees/<branch>` off `origin/<base>` (default: origin's default branch — this is what stops worktrees being branched off the *active* branch) and links the Claude project context + gitignored creds.

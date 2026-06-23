@@ -18,13 +18,13 @@ It is **opt-in per repo** and off by default everywhere. See `worktree-disciplin
 
 ```bash
 mkdir -p ~/.claude/hooks
-cp /home/neil/code/threadsafe/claude-skills/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh ~/.claude/hooks/worktree-discipline.sh
+cp "${CLAUDE_PLUGIN_ROOT}/skills/setup-worktree-discipline/worktree-discipline.sh" ~/.claude/hooks/worktree-discipline.sh
 chmod +x ~/.claude/hooks/worktree-discipline.sh
 ```
 
 **2. Remove the superseded hook, if present.** This replaces the older git-only `git-branch-discipline.sh`. Read `~/.claude/settings.json`; if a `PreToolUse` entry points at `git-branch-discipline.sh`, delete that entry (and the old script) so the two don't both fire.
 
-**3. Register the hook.** Read `~/.claude/settings.json` first, then **merge** this into `hooks.PreToolUse` (do not clobber other hooks). Use the absolute home path — `~` is not expanded in every hook-runner:
+**3. Register the hook.** Read `~/.claude/settings.json` first, then **merge** this into `hooks.PreToolUse` (do not clobber other hooks). Use `$HOME` — `~` is not expanded in every hook-runner:
 
 ```json
 {
@@ -33,7 +33,7 @@ chmod +x ~/.claude/hooks/worktree-discipline.sh
       {
         "matcher": "Write|Edit|NotebookEdit|Bash",
         "hooks": [
-          { "type": "command", "command": "bash /home/neil/.claude/hooks/worktree-discipline.sh" }
+          { "type": "command", "command": "bash $HOME/.claude/hooks/worktree-discipline.sh" }
         ]
       }
     ]

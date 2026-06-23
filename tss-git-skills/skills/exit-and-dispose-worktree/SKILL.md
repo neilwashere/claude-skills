@@ -29,7 +29,7 @@ The session is now back in the main checkout. (If `ExitWorktree` reports no acti
 **Step 2 — dispose the tree (Bash, from the main checkout):**
 
 ```
-bash /home/neil/code/threadsafe/claude-skills/tss-git-skills/skills/exit-and-dispose-worktree/scripts/wt-rm.sh <branch> [--force]
+bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <branch> [--force]
 git branch -d <branch>    # delete the merged branch (optional tidy-up)
 ```
 
