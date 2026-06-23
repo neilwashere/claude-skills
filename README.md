@@ -39,10 +39,15 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 - **[grilling](./skills/productivity/grilling/SKILL.md)** — Interview the user relentlessly about a plan or design until every branch of the decision tree is resolved. (Used by `grill-with-docs`.)
 - **[multi-perspective-research](./skills/productivity/multi-perspective-research/SKILL.md)** — Research a topic from several adaptively-chosen expert lenses in parallel, then map where they agree, clash, and collectively miss (contradiction / consensus / blind-spot map).
 
+### Subsystems
+
+A self-contained system that ships plugin-level hooks and commands. It lives outside the buckets at `skills/continuous-learning-v2/` so its hook paths stay stable — see [CLAUDE.md](./CLAUDE.md).
+
+- **[continuous-learning-v2](./skills/continuous-learning-v2/SKILL.md)** (instincts) — Session-learning loop: hooks observe tool use and inject high-confidence instincts at session start. Managed by the `/evolve`, `/promote`, `/prune`, `/instinct-status`, `/instinct-import`, `/instinct-export`, and `/projects` commands (all `threadsafe:`-namespaced). Shares instinct data (`~/.local/share/ecc-homunculus`) with any prior ECC/Emerge install.
+
 ## tss-git-skills
 
-Install separately: `/plugin install tss-git-skills@threadsafe`. Full list in
-[tss-git-skills/README.md](./tss-git-skills/README.md).
+A separate, separately-installed plugin in this marketplace (namespaced `tss-git-skills:<skill>`): `/plugin install tss-git-skills@threadsafe`. Full list in [tss-git-skills/README.md](./tss-git-skills/README.md).
 
 **User-invoked**
 
@@ -52,9 +57,3 @@ Install separately: `/plugin install tss-git-skills@threadsafe`. Full list in
 
 - **[create-and-enter-worktree](./tss-git-skills/skills/create-and-enter-worktree/SKILL.md)** — Create a sibling worktree off `origin/<default>` and relocate the session into it via the `EnterWorktree` tool, before writing a feature's spec, plan, or code.
 - **[exit-and-dispose-worktree](./tss-git-skills/skills/exit-and-dispose-worktree/SKILL.md)** — After a PR merges, leave the worktree session then remove the tree.
-
-### Subsystems
-
-A self-contained system that ships plugin-level hooks and commands. It lives outside the buckets at `skills/continuous-learning-v2/` so its hook paths stay stable — see [CLAUDE.md](./CLAUDE.md).
-
-- **[continuous-learning-v2](./skills/continuous-learning-v2/SKILL.md)** (instincts) — Session-learning loop: hooks observe tool use and inject high-confidence instincts at session start. Managed by the `/evolve`, `/promote`, `/prune`, `/instinct-status`, `/instinct-import`, `/instinct-export`, and `/projects` commands (all `threadsafe:`-namespaced). Shares instinct data (`~/.local/share/ecc-homunculus`) with any prior ECC/Emerge install.
