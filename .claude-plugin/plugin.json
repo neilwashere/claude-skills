@@ -12,6 +12,7 @@
     "./skills/engineering/grill-with-docs",
     "./skills/engineering/adversarial-review",
     "./skills/engineering/address-pr-comments",
-    "./skills/productivity/grilling"
+    "./skills/productivity/grilling",
+    "./skills/productivity/multi-perspective-research"
   ]
 }

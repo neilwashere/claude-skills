@@ -37,6 +37,7 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 **Model-invoked**
 
 - **[grilling](./skills/productivity/grilling/SKILL.md)** — Interview the user relentlessly about a plan or design until every branch of the decision tree is resolved. (Used by `grill-with-docs`.)
+- **[multi-perspective-research](./skills/productivity/multi-perspective-research/SKILL.md)** — Research a topic from several adaptively-chosen expert lenses in parallel, then map where they agree, clash, and collectively miss (contradiction / consensus / blind-spot map).
 
 ## tss-git-skills
 
