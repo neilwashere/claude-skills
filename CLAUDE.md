@@ -25,9 +25,12 @@ Every `SKILL.md` is either user-invoked (`disable-model-invocation: true`, reach
 
 ## Install
 
-Local-directory marketplace (edits are live, git-synced):
+From GitHub:
 
 ```
-/plugin marketplace add /home/neil/code/threadsafe/claude-skills
+/plugin marketplace add neilwashere/claude-skills
 /plugin install threadsafe@threadsafe
+/plugin install tss-git-skills@threadsafe
 ```
+
+For live, git-synced local development, point the marketplace at your checkout instead: `/plugin marketplace add /path/to/claude-skills`.

@@ -6,11 +6,18 @@ This repo is a **marketplace** hosting `threadsafe` (the general catch-all, skil
 
 ## Install
 
-Install as a local-directory marketplace so your edits stay live and git-synced:
+Add the marketplace from GitHub, then install whichever plugins you want (both live in this one marketplace):
 
 ```bash
-/plugin marketplace add /home/neil/code/threadsafe/claude-skills
+/plugin marketplace add neilwashere/claude-skills
 /plugin install threadsafe@threadsafe
+/plugin install tss-git-skills@threadsafe
+```
+
+For live, git-synced local development, point the marketplace at your checkout instead of the GitHub repo:
+
+```bash
+/plugin marketplace add /path/to/claude-skills
 ```
 
 ## Reference
