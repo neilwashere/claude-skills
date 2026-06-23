@@ -24,6 +24,7 @@ Full list in [tss-git-skills/README.md](./tss-git-skills/README.md).
 **User-invoked**
 
 - **[setup-worktree-discipline](./tss-git-skills/skills/setup-worktree-discipline/SKILL.md)** — One-time installer: a PreToolUse hook making the main checkout read-only in opted-in repos (all writes go through a worktree), plus the global CLAUDE.md rule.
+- **[teardown-worktree-discipline](./tss-git-skills/skills/teardown-worktree-discipline/SKILL.md)** — The clean exit: deregisters the hook, deletes the copied script, and strips the global CLAUDE.md rule. Run before `/plugin uninstall` (uninstall alone leaves the hook firing).
 
 **Model-invoked**
 
