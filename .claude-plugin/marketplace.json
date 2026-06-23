@@ -1,18 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "threadsafe",
-  "description": "Neil's personal Claude Code skills collection.",
+  "description": "Curated git/worktree workflow skills for Claude Code.",
   "owner": {
     "name": "Neil Chambers",
     "email": "neil@threadsafe.systems"
   },
   "plugins": [
-    {
-      "name": "threadsafe",
-      "description": "Personal engineering and productivity skills, namespaced as threadsafe:<skill>.",
-      "source": ".",
-      "category": "development"
-    },
     {
       "name": "tss-git-skills",
       "description": "Curated git/worktree workflow skills, namespaced as tss-git-skills:<skill>.",
