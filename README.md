@@ -2,7 +2,7 @@
 
 My personal Claude Code skills — engineering workflows I use day to day, plus the **instincts** session-learning subsystem.
 
-This repo is a **single plugin** named `threadsafe`, so every skill invokes as `threadsafe:<skill>` (e.g. `threadsafe:tdd`, `threadsafe:adversarial-review`). Skills are small, composable, and meant to be hacked on.
+This repo is a **marketplace** hosting `threadsafe` (the general catch-all, skills invoke as `threadsafe:<skill>`) plus one curated **domain** plugin per domain, each named `tss-<domain>` (skills invoke as `tss-<domain>:<skill>`). Skills are small, composable, and meant to be hacked on.
 
 ## Install
 
@@ -22,7 +22,6 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 **User-invoked**
 
 - **[grill-with-docs](./skills/engineering/grill-with-docs/SKILL.md)** — A relentless interview to sharpen a plan or design that also writes the docs (ADRs and a glossary) as you go.
-- **[setup-worktree-discipline](./skills/engineering/setup-worktree-discipline/SKILL.md)** — One-time installer: a PreToolUse hook making the main checkout read-only in opted-in repos (all writes go through a worktree), plus the global CLAUDE.md rule.
 
 **Model-invoked**
 
@@ -32,14 +31,26 @@ Skills are split into **User-invoked** (reachable only when you type them — `d
 - **[domain-modeling](./skills/engineering/domain-modeling/SKILL.md)** — Build and sharpen a project's domain model; record decisions as ADRs and a glossary.
 - **[adversarial-review](./skills/engineering/adversarial-review/SKILL.md)** — Pre-landing PR review: parallel specialists hunt structural issues tests miss.
 - **[address-pr-comments](./skills/engineering/address-pr-comments/SKILL.md)** — Triage and address PR review comments: fix, commit, push, reply inline.
-- **[create-and-enter-worktree](./skills/engineering/create-and-enter-worktree/SKILL.md)** — Create a sibling worktree off `origin/<default>` and relocate the session into it via the `EnterWorktree` tool, before writing a feature's spec, plan, or code.
-- **[exit-and-dispose-worktree](./skills/engineering/exit-and-dispose-worktree/SKILL.md)** — After a PR merges, leave the worktree session then remove the tree.
 
 ### Productivity
 
 **Model-invoked**
 
 - **[grilling](./skills/productivity/grilling/SKILL.md)** — Interview the user relentlessly about a plan or design until every branch of the decision tree is resolved. (Used by `grill-with-docs`.)
+
+## tss-git-skills
+
+Install separately: `/plugin install tss-git-skills@threadsafe`. Full list in
+[tss-git-skills/README.md](./tss-git-skills/README.md).
+
+**User-invoked**
+
+- **[setup-worktree-discipline](./tss-git-skills/skills/setup-worktree-discipline/SKILL.md)** — One-time installer: a PreToolUse hook making the main checkout read-only in opted-in repos (all writes go through a worktree), plus the global CLAUDE.md rule.
+
+**Model-invoked**
+
+- **[create-and-enter-worktree](./tss-git-skills/skills/create-and-enter-worktree/SKILL.md)** — Create a sibling worktree off `origin/<default>` and relocate the session into it via the `EnterWorktree` tool, before writing a feature's spec, plan, or code.
+- **[exit-and-dispose-worktree](./tss-git-skills/skills/exit-and-dispose-worktree/SKILL.md)** — After a PR merges, leave the worktree session then remove the tree.
 
 ### Subsystems
 
