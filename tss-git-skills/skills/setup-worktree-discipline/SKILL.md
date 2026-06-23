@@ -18,7 +18,7 @@ It is **opt-in per repo** and off by default everywhere. See `worktree-disciplin
 
 ```bash
 mkdir -p ~/.claude/hooks
-cp /home/neil/code/threadsafe/claude-skills/skills/engineering/setup-worktree-discipline/worktree-discipline.sh ~/.claude/hooks/worktree-discipline.sh
+cp /home/neil/code/threadsafe/claude-skills/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh ~/.claude/hooks/worktree-discipline.sh
 chmod +x ~/.claude/hooks/worktree-discipline.sh
 ```
 
