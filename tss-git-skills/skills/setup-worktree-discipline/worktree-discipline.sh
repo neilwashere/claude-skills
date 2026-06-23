@@ -168,8 +168,11 @@ if [ "$TOOL" = "Bash" ]; then
   # > / >> / tee / sed -i vectors; not a complete guard (complex pipelines, cp/mv,
   # dd, python -c open(), etc. can still slip through — the Write/Edit block above
   # is the robust layer).
+  # The char before '>' must not be 0-9 > & = - : excluding '=' and '-' stops the
+  # operators '=>' and '->' (in echo strings, awk/perl/js one-liners) being misread
+  # as a redirect into a file named after the following word (false-positive deny).
   CANDS=$(
-    printf '%s' "$COMMAND" | grep -oE '(^|[^0-9>&])>>?[[:space:]]*[^[:space:]><|&;()]+' | sed -E 's/.*>>?[[:space:]]*//'
+    printf '%s' "$COMMAND" | grep -oE '(^|[^0-9>&=-])>>?[[:space:]]*[^[:space:]><|&;()]+' | sed -E 's/.*>>?[[:space:]]*//'
     printf '%s' "$COMMAND" | grep -oE '\btee[[:space:]]+(-a[[:space:]]+)?[^[:space:]><|&;()]+' | sed -E 's/.*tee[[:space:]]+(-a[[:space:]]+)?//'
     if printf '%s' "$COMMAND" | grep -qE '\bsed[[:space:]]+(-[a-zA-Z]*i|--in-place)'; then
       printf '%s' "$COMMAND" | grep -oE '[^[:space:]><|&;()]+$'
