@@ -19,6 +19,7 @@ user-reachable).
 ## User-invoked
 
 - **[setup-worktree-discipline](./skills/setup-worktree-discipline/SKILL.md)** — One-time installer: a PreToolUse hook that makes the main checkout read-only in opted-in repos (all writes go through a worktree), plus the global CLAUDE.md branch-discipline rule.
+- **[teardown-worktree-discipline](./skills/teardown-worktree-discipline/SKILL.md)** — The clean exit: deregister the hook from `~/.claude/settings.json`, delete the copied hook script, and strip the global CLAUDE.md rule. Run it before `/plugin uninstall` (uninstall alone leaves the hook firing).
 - **[worktree-enforce](./skills/worktree-enforce/SKILL.md)** — Opt the current repo `in`/`out` of worktree-discipline enforcement, or show `status`. Manages the per-repo marker the setup hook reads (committed policy + gitignored local override).
 
 ## Model-invoked

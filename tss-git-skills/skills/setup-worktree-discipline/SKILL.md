@@ -85,3 +85,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"'"$PWD"'/probe.txt"}}' \
 ```
 
 Empty output from an opted-in main checkout means the script isn't reachable (check the path/exec bit). Empty output from a worktree, a non-opted-in repo, or a non-repo dir is **expected** — that's the silent-allow path.
+
+## Removing it
+
+This installs *outside* the plugin (a copied hook + a `settings.json` entry + a CLAUDE.md rule), so `/plugin uninstall` does **not** undo it — the hook keeps firing. To remove cleanly, run `/teardown-worktree-discipline` **before** uninstalling the plugin.
