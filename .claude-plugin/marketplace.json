@@ -12,6 +12,12 @@
       "description": "Personal engineering and productivity skills, namespaced as threadsafe:<skill>.",
       "source": ".",
       "category": "development"
+    },
+    {
+      "name": "tss-git-skills",
+      "description": "Curated git/worktree workflow skills, namespaced as tss-git-skills:<skill>.",
+      "source": "./tss-git-skills",
+      "category": "development"
     }
   ]
 }
