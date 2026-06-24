@@ -86,6 +86,17 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"'"$PWD"'/probe.txt"}}' \
 
 Empty output from an opted-in main checkout means the script isn't reachable (check the path/exec bit). Empty output from a worktree, a non-opted-in repo, or a non-repo dir is **expected** — that's the silent-allow path.
 
+## Update the installed hook
+
+Step 1 **copies** `worktree-discipline.sh` into `~/.claude/hooks/` rather than referencing it in place — that's deliberate (the rule then survives independently of the plugin). The cost: a plugin update does **not** refresh the copy. After upgrading the plugin, re-copy:
+
+```bash
+cp "${CLAUDE_PLUGIN_ROOT}/skills/setup-worktree-discipline/worktree-discipline.sh" ~/.claude/hooks/worktree-discipline.sh
+chmod +x ~/.claude/hooks/worktree-discipline.sh
+```
+
+No reload needed — the hook command re-reads the file on every tool call. `worktree-enforce status` detects this drift: it prints **STALE** (with the exact `cp` to run) when the installed copy differs from the plugin's bundled hook, **MISSING** if the registered file is gone, else plain **installed**.
+
 ## Removing it
 
 This installs *outside* the plugin (a copied hook + a `settings.json` entry + a CLAUDE.md rule), so `/plugin uninstall` does **not** undo it — the hook keeps firing. To remove cleanly, run `/teardown-worktree-discipline` **before** uninstalling the plugin.

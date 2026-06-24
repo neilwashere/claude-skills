@@ -113,8 +113,21 @@ case "$CMD" in
     fi
 
     settings="$HOME/.claude/settings.json"
+    installed_hook="$HOME/.claude/hooks/worktree-discipline.sh"
+    # Source of truth: the hook bundled next to this skill in the plugin. setup
+    # COPIES it to ~/.claude/hooks (so it survives independently of the plugin),
+    # which means a plugin update leaves the copy stale — detect that drift here.
+    # $0 is the absolute script path, so the sibling skill resolves relative to it.
+    src_hook="$(dirname "$0")/../../setup-worktree-discipline/worktree-discipline.sh"
     if [ -f "$settings" ] && jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$settings" >/dev/null 2>&1; then
-      echo "global hook:  installed"
+      if [ ! -f "$installed_hook" ]; then
+        echo "global hook:  registered but MISSING at $installed_hook — re-run /setup-worktree-discipline"
+      elif [ -f "$src_hook" ] && ! cmp -s "$src_hook" "$installed_hook"; then
+        echo "global hook:  installed (STALE — differs from the plugin's bundled hook)"
+        echo "             update: cp \"$src_hook\" \"$installed_hook\""
+      else
+        echo "global hook:  installed"
+      fi
     else
       echo "global hook:  NOT installed — run /setup-worktree-discipline (enforcement won't fire without it)"
     fi

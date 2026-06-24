@@ -40,7 +40,9 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh"
 
 - **`status`** — print, for the current repo: the effective enforcement (ON/OFF) and
   which marker it came from, any `allowPaths`, whether you're in a main checkout or a
-  worktree, and whether the global hook is installed.
+  worktree, and whether the global hook is installed — flagging **STALE** if the
+  installed copy has drifted from the plugin's bundled hook, or **MISSING** if the
+  registered file is gone.
 
 ## Notes
 
