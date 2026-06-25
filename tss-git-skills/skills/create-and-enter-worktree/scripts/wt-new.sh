@@ -57,17 +57,15 @@ link_claude() {
   if [[ -d "$main_link" && ! -e "$wt_link" ]]; then
     ln -s "$main_link" "$wt_link" && echo "Claude context linked to main repo" >&2
   fi
-  if [[ -d "$main_abs/.claude" ]]; then
-    local rel src dst
-    while IFS= read -r rel; do
-      [ -n "$rel" ] || continue
-      src="$main_abs/$rel"; dst="$wt_abs/$rel"
-      if [ -e "$src" ] && [ ! -e "$dst" ]; then
-        mkdir -p "$(dirname "$dst")"
-        ln -s "$src" "$dst" && echo "$rel linked to main repo" >&2
-      fi
-    done < <(wtc_worktree_link "$main_abs")
-  fi
+  local rel src dst
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    src="$main_abs/$rel"; dst="$wt_abs/$rel"
+    if [ -e "$src" ] && [ ! -e "$dst" ]; then
+      mkdir -p "$(dirname "$dst")"
+      ln -s "$src" "$dst" && echo "$rel linked to main repo" >&2
+    fi
+  done < <(wtc_worktree_link "$main_abs")
 }
 
 # Resolve the MAIN repo root (first worktree in the list is always the main

@@ -170,6 +170,31 @@ test_hook_exempts_config_markers() {
   rm -rf "$sb"
 }
 
+test_wtnew_links_without_claude_dir() {
+  local sb; sb="$(mktemp -d)"
+  local repo="$sb/repo"; mkdir -p "$repo"
+  ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  # No .claude/ dir in the repo — configure via the global tier only.
+  printf 'content' > "$repo/.env"
+  mkdir -p "$sb/home/.claude"
+  printf '{"worktreeDir":"%s/trees/{branch}","worktreeLink":[".env"]}' "$sb" \
+    > "$sb/home/.claude/worktree-config.json"
+  local wt="$sb/trees/feat-x"
+  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
+  if [ -L "$wt/.env" ]; then
+    local target; target="$(readlink "$wt/.env")"
+    if [ "$target" = "$repo/.env" ]; then
+      printf 'PASS: %s\n' "wtnew_links_without_claude_dir: .env symlink points at main repo"
+    else
+      printf 'FAIL: wtnew_links_without_claude_dir: .env symlink target wrong: %s\n' "$target"; FAILED=1
+    fi
+  else
+    printf 'FAIL: wtnew_links_without_claude_dir: .env not symlinked in worktree\n'; FAILED=1
+  fi
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
