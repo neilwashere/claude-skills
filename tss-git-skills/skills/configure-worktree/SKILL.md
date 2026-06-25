@@ -47,7 +47,7 @@ one.
    - *Committed (team)* — `.claude/worktree-config.json`, shared via git. Scope = `committed`.
    - *Just me (local)* — `.claude/worktree-config.local.json`, gitignored. Scope = `local`.
 
-If the user kept every field at its default, say so and skip writing (nothing to set).
+Omit any of **Location / Stack / Mirror** the user left at its default. **Always include the Branch-naming choice** explicitly — it must be written to override a prior or lower-tier `false` (this is the only field that is never omitted). So the assembled object always has at least `branchNaming`; if the user wants no change at all, cancel rather than write.
 
 ## Notes
 
