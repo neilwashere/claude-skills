@@ -25,6 +25,7 @@ Full list in [tss-git-skills/README.md](./tss-git-skills/README.md).
 
 - **[setup-worktree-discipline](./tss-git-skills/skills/setup-worktree-discipline/SKILL.md)** — One-time installer: a PreToolUse hook making the main checkout read-only in opted-in repos (all writes go through a worktree), plus the global CLAUDE.md rule.
 - **[teardown-worktree-discipline](./tss-git-skills/skills/teardown-worktree-discipline/SKILL.md)** — The clean exit: deregisters the hook, deletes the copied script, and strips the global CLAUDE.md rule. Run before `/plugin uninstall` (uninstall alone leaves the hook firing).
+- **[worktree-enforce](./tss-git-skills/skills/worktree-enforce/SKILL.md)** — Opt the current repo `in`/`out` of enforcement, show `status`, or run `doctor` (a global-wiring audit + live-deny health check). Manages the per-repo marker the setup hook reads.
 - **[configure-worktree](./tss-git-skills/skills/configure-worktree/SKILL.md)** — Guided `AskUserQuestion` setup for the worktree-config marker family (worktree location, files to mirror, post-create command, branch naming) at global / committed / local scope. Config only — enforcement stays with `worktree-enforce`.
 
 **Model-invoked**
