@@ -30,3 +30,5 @@ Full list in [tss-git-skills/README.md](./tss-git-skills/README.md).
 
 - **[create-and-enter-worktree](./tss-git-skills/skills/create-and-enter-worktree/SKILL.md)** — Create a sibling worktree off `origin/<default>` and relocate the session into it via the `EnterWorktree` tool, before writing a feature's spec, plan, or code.
 - **[exit-and-dispose-worktree](./tss-git-skills/skills/exit-and-dispose-worktree/SKILL.md)** — After a PR merges, leave the worktree session then remove the tree.
+
+> Worktree creation is configurable via `worktree-config.json` (three-tier: committed / local / global). See [`docs/superpowers/specs/2026-06-25-worktree-customisation-design.md`](./docs/superpowers/specs/2026-06-25-worktree-customisation-design.md).

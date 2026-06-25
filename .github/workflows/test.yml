@@ -1,0 +1,14 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  bash-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure jq
+        run: jq --version || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Run resolver tests
+        run: bash tests/run.sh

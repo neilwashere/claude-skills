@@ -29,6 +29,16 @@
 # project context + gitignored creds linked back to the main repo.
 set -euo pipefail
 
+# Resolve the shared config lib relative to THIS script (fail loud if absent —
+# it ships with the plugin; a missing copy means a broken install).
+_WTN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_WTC_LIB="$_WTN_DIR/../../../lib/worktree-config.sh"
+if [ ! -f "$_WTC_LIB" ]; then
+  echo "wt-new: missing config lib at $_WTC_LIB (broken plugin install)" >&2; exit 1
+fi
+# shellcheck source=/dev/null
+. "$_WTC_LIB"
+
 branch="${1:?usage: wt-new.sh <branch> [base]}"
 branch="${branch#origin/}"
 
@@ -47,24 +57,30 @@ link_claude() {
   if [[ -d "$main_link" && ! -e "$wt_link" ]]; then
     ln -s "$main_link" "$wt_link" && echo "Claude context linked to main repo" >&2
   fi
-  if [[ -d "$main_abs/.claude" ]]; then
-    mkdir -p "$wt_abs/.claude"
-    local f
-    for f in settings.local.json .credentials.json; do
-      if [[ -e "$main_abs/.claude/$f" && ! -e "$wt_abs/.claude/$f" ]]; then
-        ln -s "$main_abs/.claude/$f" "$wt_abs/.claude/$f" && echo ".claude/$f linked to main repo" >&2
-      fi
-    done
+  local rel src dst links
+  if ! links="$(wtc_worktree_link "$main_abs")"; then
+    echo "wt-new: invalid worktreeLink config" >&2; exit 1
   fi
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    src="$main_abs/$rel"; dst="$wt_abs/$rel"
+    if [ -e "$src" ] && [ ! -e "$dst" ]; then
+      mkdir -p "$(dirname "$dst")"
+      ln -s "$src" "$dst" && echo "$rel linked to main repo" >&2
+    fi
+  done <<< "$links"
 }
 
 # Resolve the MAIN repo root (first worktree in the list is always the main
 # checkout), regardless of where this script is invoked from.
 main_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
 [[ -n "$main_root" ]] || { echo "wt-new: not inside a git repository" >&2; exit 1; }
-repo="$(basename "$main_root")"
-parent="$(dirname "$main_root")"
-dir="${parent}/${repo}.worktrees/${branch//\//-}"
+dir="$(wtc_worktree_dir "$main_root" "$branch")" || exit 1
+
+# Pre-validate worktreeLink config before touching the filesystem — fail loud
+# here so we never create a partial worktree with a broken link config.
+_wtnew_links="$(wtc_worktree_link "$main_root")" \
+  || { echo "wt-new: invalid worktreeLink config" >&2; exit 1; }
 
 # Already registered for this branch? Ensure links, report, done.
 existing="$(git -C "$main_root" worktree list --porcelain \

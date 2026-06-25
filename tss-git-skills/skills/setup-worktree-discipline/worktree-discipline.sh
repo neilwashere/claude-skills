@@ -100,7 +100,7 @@ ALLOWPATHS=$(jq -r '(.allowPaths // [])[]' "$ACTIVE" 2>/dev/null)
 is_allowed_path() {
   local rel="$1"
   case "$rel" in
-    .claude/worktree-discipline.json|.claude/worktree-discipline.local.json) return 0 ;;
+    .claude/worktree-discipline.json|.claude/worktree-discipline.local.json|.claude/worktree-config.json|.claude/worktree-config.local.json) return 0 ;;
     .git/*) return 0 ;;
   esac
   local g

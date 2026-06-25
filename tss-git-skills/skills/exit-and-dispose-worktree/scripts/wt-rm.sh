@@ -12,6 +12,14 @@
 # Usage: wt-rm.sh <branch-or-path> [--force]
 set -euo pipefail
 
+_WTR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_WTC_LIB="$_WTR_DIR/../../../lib/worktree-config.sh"
+if [ ! -f "$_WTC_LIB" ]; then
+  echo "wt-rm: missing config lib at $_WTC_LIB (broken plugin install)" >&2; exit 1
+fi
+# shellcheck source=/dev/null
+. "$_WTC_LIB"
+
 target="${1:?usage: wt-rm.sh <branch-or-path> [--force]}"; shift || true
 force=0
 for a in "$@"; do [[ "$a" == "--force" || "$a" == "-f" ]] && force=1; done
@@ -34,8 +42,7 @@ if [[ -z "$dir" ]]; then
   if [[ -d "$target" ]] && git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     dir="$(cd "$target" && pwd)"            # explicit existing worktree path
   else
-    repo="$(basename "$main_root")"; parent="$(dirname "$main_root")"
-    dir="${parent}/${repo}.worktrees/${branch//\//-}"
+    dir="$(wtc_worktree_dir "$main_root" "$branch")" || exit 1
   fi
 fi
 [[ -d "$dir" ]] || { echo "wt-rm: no worktree at $dir" >&2; exit 1; }
@@ -57,9 +64,19 @@ fi
 # Unlink Claude context symlink + creds so `git worktree remove` does not balk.
 wt_link="$HOME/.claude/projects/$(encode_path "$dir")"
 [[ -L "$wt_link" ]] && rm "$wt_link" && echo "Claude context symlink removed"
-for f in settings.local.json .credentials.json; do
-  [[ -L "$dir/.claude/$f" ]] && rm "$dir/.claude/$f"
-done
+main_real="$(cd "$main_root" && pwd -P)"
+links=""
+if ! links="$(wtc_worktree_link "$main_root")"; then
+  echo "wt-rm: invalid worktreeLink config" >&2; exit 1
+fi
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
+  local_dst="$dir/$rel"
+  if [ -L "$local_dst" ]; then
+    tgt="$(readlink "$local_dst")"
+    case "$tgt" in "$main_real"/*|"$main_root"/*) rm "$local_dst" ;; esac
+  fi
+done <<< "$links"
 
 git -C "$main_root" worktree remove ${force:+--force} "$dir"
 echo "Worktree removed: $dir"

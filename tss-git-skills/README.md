@@ -26,3 +26,5 @@ user-reachable).
 
 - **[create-and-enter-worktree](./skills/create-and-enter-worktree/SKILL.md)** — Create a sibling worktree off `origin/<default>` and relocate the session into it via the `EnterWorktree` tool. Run before writing a feature's spec, plan, or code.
 - **[exit-and-dispose-worktree](./skills/exit-and-dispose-worktree/SKILL.md)** — After a PR merges, leave the worktree session (`ExitWorktree({keep})`) then remove the tree with `wt-rm.sh` (refuses if dirty/unpushed).
+
+> Worktree creation is configurable: `wt-new`/`wt-rm` read a three-tier `worktree-config.json` family (`.claude/worktree-config.json` → `.local.json` → `~/.claude/worktree-config.json`). See `docs/superpowers/specs/2026-06-25-worktree-customisation-design.md`.
