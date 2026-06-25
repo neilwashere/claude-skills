@@ -245,6 +245,56 @@ test_wtnew_emits_postcreate_to_stderr() {
   rm -rf "$sb"
 }
 
+_cfg_repo() { # echo a fresh temp repo path with git initialised
+  local sb="$1"; mkdir -p "$sb/repo"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+CFG="$ROOT/tss-git-skills/skills/configure-worktree/scripts/configure-worktree.sh"
+
+test_configure_committed_writes_and_stages() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
+  ( cd "$repo" && printf '{"worktreeDir":"X/{branch}"}' | HOME="$sb/home" bash "$CFG" committed ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.worktreeDir' "$repo/.claude/worktree-config.json")" "X/{branch}" "committed worktreeDir written"
+  ( cd "$repo" && git diff --cached --name-only ) | grep -qx ".claude/worktree-config.json" \
+    && printf 'PASS: %s\n' "committed file staged" || { printf 'FAIL: committed file not staged\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+test_configure_merges_existing() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
+  mkdir -p "$repo/.claude"; printf '{"worktreeLink":[".env"]}' > "$repo/.claude/worktree-config.json"
+  ( cd "$repo" && printf '{"worktreeDir":"X"}' | HOME="$sb/home" bash "$CFG" committed ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.worktreeLink[0]' "$repo/.claude/worktree-config.json")" ".env" "existing key preserved on merge"
+  assert_eq "$(jq -r '.worktreeDir' "$repo/.claude/worktree-config.json")" "X" "new key added on merge"
+  rm -rf "$sb"
+}
+test_configure_local_gitignores() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
+  ( cd "$repo" && printf '{"postCreate":"npm install"}' | HOME="$sb/home" bash "$CFG" local ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.postCreate' "$repo/.claude/worktree-config.local.json")" "npm install" "local file written"
+  grep -qx ".claude/worktree-config.local.json" "$repo/.gitignore" \
+    && printf 'PASS: %s\n' "local file gitignored" || { printf 'FAIL: local not gitignored\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+test_configure_global() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
+  ( cd "$repo" && printf '{"worktreeDir":"G/{branch}"}' | HOME="$sb/home" bash "$CFG" global ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.worktreeDir' "$sb/home/.claude/worktree-config.json")" "G/{branch}" "global file written under HOME"
+  rm -rf "$sb"
+}
+_cfg_try() { printf '%s' "$3" | HOME="$2" bash "$CFG" "$1"; }
+test_configure_bad_scope() {
+  local sb; sb="$(mktemp -d)"
+  assert_fails "bad scope rejected" _cfg_try bogus "$sb/home" '{"worktreeDir":"X"}'
+  rm -rf "$sb"
+}
+test_configure_bad_json() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
+  assert_fails "non-object stdin rejected" bash -c 'cd "'"$repo"'" && printf "notjson" | HOME="'"$sb"'/home" bash "'"$CFG"'" committed'
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
