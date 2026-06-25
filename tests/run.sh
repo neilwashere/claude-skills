@@ -60,6 +60,39 @@ test_field_raw_absent() {
   rm -rf "$sb"
 }
 
+_try_dir() { HOME="$2" wtc_worktree_dir "$1" "$3"; }
+
+test_dir_default() {
+  local sb; sb="$(new_sandbox)"; local repo="$sb/repo"
+  local parent; parent="$(dirname "$repo")"; local name; name="$(basename "$repo")"
+  assert_eq "$(HOME="$sb/home" wtc_worktree_dir "$repo" feat/x)" \
+    "$parent/$name.worktrees/feat-x" "default template reproduces sibling layout + slug"
+  rm -rf "$sb"
+}
+test_dir_global_template_tokens() {
+  local sb; sb="$(new_sandbox)"; local repo="$sb/repo"; local name; name="$(basename "$repo")"
+  wcfg_global "$sb" '{"worktreeDir":"~/wt/{repo}/{branch}"}'
+  assert_eq "$(HOME="$sb/home" wtc_worktree_dir "$repo" feat/x)" \
+    "$sb/home/wt/$name/feat-x" "~ + {repo}/{branch} expansion"
+  rm -rf "$sb"
+}
+test_dir_relative_resolves_against_parent() {
+  local sb; sb="$(new_sandbox)"; local repo="$sb/repo"; local parent; parent="$(dirname "$repo")"
+  wcfg "$sb" '{"worktreeDir":"trees/{branch}"}'
+  assert_eq "$(HOME="$sb/home" wtc_worktree_dir "$repo" main)" "$parent/trees/main" "relative resolves against {parent}"
+  rm -rf "$sb"
+}
+test_dir_unknown_token_errors() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"worktreeDir":"/tmp/{bogus}/x"}'
+  assert_fails "unknown token errors" _try_dir "$sb/repo" "$sb/home" main
+  rm -rf "$sb"
+}
+test_dir_inside_main_rejected() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"worktreeDir":"{parent}/'"$(basename "$sb/repo")"'/inside"}'
+  assert_fails "dir inside main checkout rejected" _try_dir "$sb/repo" "$sb/home" main
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"

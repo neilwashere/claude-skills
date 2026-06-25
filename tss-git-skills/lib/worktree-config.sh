@@ -27,3 +27,43 @@ _wtc_field_raw() {
   done
   return 1
 }
+
+# wtc_worktree_dir <repo_root> <branch> → absolute resolved worktree dir.
+wtc_worktree_dir() {
+  local repo_root="$1" branch="$2" tmpl
+  tmpl="$(_wtc_field_raw "$repo_root" worktreeDir | jq -r '.' 2>/dev/null)" || tmpl=""
+  [ -n "$tmpl" ] || tmpl='{parent}/{repo}.worktrees/{branch}'
+
+  local repo parent slug
+  repo="$(basename "$repo_root")"
+  parent="$(dirname "$repo_root")"
+  slug="${branch//\//-}"
+
+  # Reject unknown {tokens} before substitution.
+  local probe="$tmpl"
+  probe="${probe//\{parent\}/}"; probe="${probe//\{repo\}/}"; probe="${probe//\{branch\}/}"
+  case "$probe" in
+    *'{'*'}'*) echo "worktree-config: unknown token in worktreeDir: $tmpl" >&2; return 1 ;;
+  esac
+
+  local out="$tmpl"
+  out="${out//\{parent\}/$parent}"; out="${out//\{repo\}/$repo}"; out="${out//\{branch\}/$slug}"
+
+  case "$out" in
+    "~")    out="$HOME" ;;
+    "~/"*)  out="$HOME/${out#\~/}" ;;
+  esac
+  out="${out//\$HOME/$HOME}"
+
+  case "$out" in /*) ;; *) out="$parent/$out" ;; esac     # relative → against {parent}
+  [ -n "$out" ] || { echo "worktree-config: worktreeDir resolved empty" >&2; return 1; }
+
+  local norm main_norm
+  norm="$(realpath -m "$out" 2>/dev/null || printf '%s' "$out")"
+  main_norm="$(realpath -m "$repo_root" 2>/dev/null || printf '%s' "$repo_root")"
+  case "$norm/" in
+    "$main_norm/"*) echo "worktree-config: worktreeDir resolves inside the main checkout ($norm)" >&2; return 1 ;;
+  esac
+
+  printf '%s\n' "$norm"
+}
