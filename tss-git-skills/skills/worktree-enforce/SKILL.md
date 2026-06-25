@@ -1,6 +1,6 @@
 ---
 name: worktree-enforce
-description: Opt the current repo in or out of worktree-discipline enforcement, or show its status. `worktree-enforce in` requires all work here to go through worktrees; `worktree-enforce out` stops enforcing (local override if the marker is committed, else removes it); `worktree-enforce status` shows whether enforcement is active, from which marker, and whether the global hook is installed. Manages the .claude/worktree-discipline.json marker the setup-worktree-discipline hook reads.
+description: Opt the current repo in or out of worktree-discipline enforcement, show its status, or run a doctor health check. `worktree-enforce in` requires all work here to go through worktrees; `worktree-enforce out` stops enforcing (local override if the marker is committed, else removes it); `worktree-enforce status` shows whether enforcement is active, from which marker, and whether the global hook is installed; `worktree-enforce doctor` audits the global wiring and runs a live-deny smoke test proving the hook actually fires. Manages the .claude/worktree-discipline.json marker the setup-worktree-discipline hook reads.
 disable-model-invocation: true
 ---
 
@@ -19,10 +19,10 @@ step. Without the global hook installed, the markers exist but nothing enforces 
 
 ## Run it
 
-Pass the subcommand the user gave (`in`, `out`, or `status`; default `status`):
+Pass the subcommand the user gave (`in`, `out`, `status`, or `doctor`; default `status`):
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status|doctor>
 ```
 
 ## What each arg does
@@ -43,6 +43,16 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh"
   worktree, and whether the global hook is installed — flagging **STALE** if the
   installed copy has drifted from the plugin's bundled hook, or **MISSING** if the
   registered file is gone.
+
+- **`doctor`** — everything `status` shows for this repo, plus a consolidated
+  health check (replacing the prose Validate blocks in the setup/teardown skills):
+  - **global wiring**, one PASS/FAIL/WARN line each — hook registered in
+    `settings.json`, installed file present, executable, **fresh** vs the bundled
+    hook, the superseded `git-branch-discipline.sh` gone, and the
+    `## Worktree discipline` rule present in `~/.claude/CLAUDE.md`;
+  - **live deny** — constructs a throwaway enforced repo and pipes a synthetic
+    `Write` through the *installed* hook, asserting it denies. This is the only
+    end-to-end proof the chain actually fires, not just that files are in place.
 
 ## Notes
 

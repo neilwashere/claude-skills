@@ -339,6 +339,51 @@ test_branchnaming_local_overrides_committed() {
   rm -rf "$sb"
 }
 
+WTE="$ROOT/tss-git-skills/skills/worktree-enforce/scripts/worktree-enforce.sh"
+
+# A sandbox HOME fully wired for worktree-discipline (hook copied + registered +
+# CLAUDE.md rule), and a repo opted in. Echoes "$sb".
+_doctor_wired_sandbox() {
+  local sb; sb="$(mktemp -d)"
+  mkdir -p "$sb/home/.claude/hooks"
+  cp "$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
+  chmod +x "$sb/home/.claude/hooks/worktree-discipline.sh"
+  printf '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit|NotebookEdit|Bash","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}}' > "$sb/home/.claude/settings.json"
+  printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$sb/repo/.claude/worktree-discipline.json"
+  printf '%s' "$sb"
+}
+
+test_doctor_all_pass_when_wired() {
+  local sb; sb="$(_doctor_wired_sandbox)"
+  local out; out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"
+  echo "$out" | grep -Eq 'live deny:.*PASS'   && printf 'PASS: %s\n' "doctor live-deny PASS when wired" || { printf 'FAIL: doctor live-deny not PASS\n%s\n' "$out"; FAILED=1; }
+  echo "$out" | grep -Eq 'hook fresh:.*PASS'  && printf 'PASS: %s\n' "doctor hook-fresh PASS when wired" || { printf 'FAIL: doctor hook-fresh not PASS\n'; FAILED=1; }
+  echo "$out" | grep -Eq 'CLAUDE.md rule:.*PASS' && printf 'PASS: %s\n' "doctor CLAUDE.md-rule PASS when wired" || { printf 'FAIL: doctor CLAUDE.md-rule not PASS\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_doctor_flags_problems_in_bare_home() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude" "$sb/repo"
+  ( cd "$sb/repo" && git init -q ) >/dev/null 2>&1
+  local out rc
+  out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"; rc=$?
+  assert_eq "$rc" "0" "doctor exits 0 even with nothing wired"
+  echo "$out" | grep -Eq 'hook registered:.*FAIL' && printf 'PASS: %s\n' "doctor flags unregistered hook" || { printf 'FAIL: doctor did not flag missing registration\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_doctor_detects_stale_hook() {
+  local sb; sb="$(_doctor_wired_sandbox)"
+  printf '\n# drift\n' >> "$sb/home/.claude/hooks/worktree-discipline.sh"   # make installed differ from bundled
+  local out; out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"
+  echo "$out" | grep -Eq 'hook fresh:.*STALE' && printf 'PASS: %s\n' "doctor detects a stale installed hook" || { printf 'FAIL: doctor did not detect stale hook\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
