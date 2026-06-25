@@ -13,7 +13,7 @@ Interactive setup for the **worktree-config** marker family
 
 ## How it works
 
-Ask the four questions below with the `AskUserQuestion` tool, assemble a JSON
+Ask the questions below with the `AskUserQuestion` tool, assemble a JSON
 object from the answers (include **only** fields the user actively set — omit a
 field to keep its built-in default), then write it to the chosen tier:
 
@@ -39,7 +39,10 @@ one.
    - *Claude only (default)* — **omit `worktreeLink`.**
    - *Claude + env* — `[".claude/settings.local.json", ".claude/.credentials.json", ".env"]`.
    - *Custom* — ask for repo-root-relative paths; set `worktreeLink`.
-4. **Scope** — "Where should this config live?"
+4. **Branch naming** (`branchNaming.embedIssueId`) — "Embed the issue/ticket number in branch names?"
+   - *Yes (default)* — **omit `branchNaming`** (the default is `embedIssueId: true`).
+   - *No* — set `branchNaming` to `{"embedIssueId": false}`.
+5. **Scope** — "Where should this config live?"
    - *Global* — `~/.claude/worktree-config.json` (all your repos). Scope = `global`.
    - *Committed (team)* — `.claude/worktree-config.json`, shared via git. Scope = `committed`.
    - *Just me (local)* — `.claude/worktree-config.local.json`, gitignored. Scope = `local`.
@@ -48,6 +51,5 @@ If the user kept every field at its default, say so and skip writing (nothing to
 
 ## Notes
 
-- `branchNaming.embedIssueId` can also be set here if the user asks; default is `true`.
 - Run it from inside the target repo (committed/local write to the main checkout root). Global works anywhere.
 - This skill writes config only. For enforcement on/off, use `worktree-enforce in|out`.
