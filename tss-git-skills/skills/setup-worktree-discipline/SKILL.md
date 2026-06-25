@@ -82,7 +82,17 @@ cd /path/to/opted-in/repo        # main checkout, NOT a worktree
 echo '{"tool_name":"Write","tool_input":{"file_path":"'"$PWD"'/probe.txt"}}' \
   | bash ~/.claude/hooks/worktree-discipline.sh
 # expect: a JSON object with "permissionDecision": "deny"
+
+# The installed copy is executable (a non-exec hook silently never fires):
+test -x ~/.claude/hooks/worktree-discipline.sh && echo "exec: OK" || echo "NOT EXECUTABLE — hook will not fire"
+# The global rule actually landed (Step 4):
+grep -q '^## Worktree discipline' ~/.claude/CLAUDE.md && echo "rule: OK" || echo "CLAUDE.md rule MISSING"
+# The superseded git-only hook is gone (Step 2):
+jq -e '[.. | .command? // empty] | any(test("git-branch-discipline.sh"))' ~/.claude/settings.json >/dev/null \
+  && echo "OLD HOOK STILL REGISTERED" || echo "old hook gone: OK"
 ```
+
+For the exec-bit, drift (**STALE**), and registration checks in one command, run the `worktree-enforce status` skill — it already reports all three (installed / STALE / MISSING).
 
 Empty output from an opted-in main checkout means the script isn't reachable (check the path/exec bit). Empty output from a worktree, a non-opted-in repo, or a non-repo dir is **expected** — that's the silent-allow path.
 
