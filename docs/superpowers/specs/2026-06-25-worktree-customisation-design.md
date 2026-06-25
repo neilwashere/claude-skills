@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-25
 - **Issue:** [#9](https://github.com/neilwashere/claude-skills/issues/9)
-- **Status:** approved design; implementation pending
+- **Status:** approved design (revised after codex review); implementation pending
 
 ## Context
 
@@ -13,9 +13,9 @@ file list mirrored into a worktree (duplicated independently in `wt-new.sh` and
 `wt-rm.sh` — bug **B2**, drift orphans files). The `create-and-enter` SKILL also
 hard-codes a JS assumption ("run `npm install`").
 
-This feature makes those decisions configurable through a typed JSON marker, adds
-a guided setup skill, and codifies the branch-naming convention — without
-touching the enforcement mechanism.
+This feature makes those decisions configurable through a typed JSON config file,
+adds a guided setup skill, and codifies the branch-naming convention — **without
+touching the enforcement mechanism**.
 
 ## Goals
 
@@ -27,47 +27,75 @@ touching the enforcement mechanism.
 
 ## Non-goals / boundaries
 
-- **Enforcement is untouched.** `enforce` and `allowPaths` remain repo-scoped and
-  owned by the `worktree-discipline.sh` hook. The new resolver reads only config
-  fields; there is zero change to deny behaviour.
+- **Enforcement is untouched.** `enforce`/`allowPaths` and the
+  `worktree-discipline.sh` hook do not change. Config lives in **separate files**
+  the hook never reads (see below), so there is no path by which configuring a
+  worktree can alter deny behaviour.
 - No shell-init / env-var configuration. All config lives in Claude-managed JSON
   files under `.claude/` and `~/.claude/`.
 - No configurable hook matcher, no auto-commit of markers, no defeating the
-  dirty/unpushed gates. (Out of scope by design.)
+  dirty/unpushed gates.
 
 ## Config model
 
-Three tiers of the **same** JSON file, resolved **field-by-field** — each field is
-taken from the first tier that defines it:
+Worktree config lives in its **own** marker family, distinct from the enforcement
+marker — this is the key correction from the codex review: overloading the
+enforcement marker would let a config-only local file silently flip `enforce`
+off, because the hook selects one marker file wholesale.
 
-```
-<repo>/.claude/worktree-discipline.local.json   per-checkout override (gitignored)
-  → <repo>/.claude/worktree-discipline.json      per-repo, committed (team policy)
-  → ~/.claude/worktree-discipline.json           user-global defaults
-  → built-in script defaults
-```
+**Two independent marker families:**
 
-Field-level (not whole-file) resolution means a global `worktreeDir`, a repo's
-committed `allowPaths`, and a local `enforce:false` all compose.
+| family | files | owner | holds |
+|---|---|---|---|
+| **Enforcement** *(unchanged)* | `<repo>/.claude/worktree-discipline.json` + `.local.json` | the hook | `enforce`, `allowPaths` |
+| **Config** *(new)* | `<repo>/.claude/worktree-config.local.json` → `<repo>/.claude/worktree-config.json` → `~/.claude/worktree-config.json` → built-in defaults | the resolver lib | `worktreeDir`, `worktreeLink`, `postCreate`, `branchNaming` |
 
-### Marker schema
+**Resolution (config family) — field-level:** for each field, **probe local, then
+committed, then global, then built-in default; the first tier that *defines* the
+field wins.** A tier whose file is **absent or unparseable is skipped** — it
+contributes nothing and does **not** reset lower tiers (a malformed local file
+never discards committed/global values). Built-in defaults apply only when no
+tier defines the field.
 
-| field | type | tiers read | default | consumer |
-|---|---|---|---|---|
-| `enforce` | bool | committed, local — **not global** | `false` | hook *(unchanged)* |
-| `allowPaths` | string[] (repo-root globs) | committed, local — **not global** | `[]` | hook *(unchanged)* |
-| `worktreeDir` | string template | global, committed, local | `"{parent}/{repo}.worktrees/{branch}"` | wt-new, wt-rm |
-| `worktreeLink` | string[] (repo-root paths) | global, committed, local | `[".claude/settings.local.json", ".claude/.credentials.json"]` | wt-new (link), wt-rm (unlink) |
-| `postCreate` | string \| string[] | global, committed, local | *(none)* | wt-new (→stderr), create SKILL |
-| `branchNaming` | `{ "embedIssueId": bool }` | global, committed, local | `{ "embedIssueId": true }` | create SKILL / configure |
+So a global `worktreeDir`, a committed `worktreeLink`, and a local `postCreate`
+all compose. The config family has no global-vs-repo restrictions because it
+never carries `enforce`/`allowPaths` (those stay repo-scoped in the enforcement
+family).
 
-- **`worktreeDir` tokens:** `{parent}` (dir containing the main repo), `{repo}`
-  (repo basename), `{branch}` (branch slug, `/`→`-`). A leading `~`/`$HOME`
-  expands; a relative template resolves against `{parent}`. The default
-  reproduces today's sibling layout exactly.
-- **`worktreeLink` entries are repo-root-relative**, so `.env`, `mcp.json`, etc.
-  can be mirrored, not just `.claude/` files. Default preserves today's two files.
-- The global marker is **optional**; absent → built-in defaults.
+### Config schema (`worktree-config.json`)
+
+| field | type | default | consumer |
+|---|---|---|---|
+| `worktreeDir` | string template | `"{parent}/{repo}.worktrees/{branch}"` | wt-new, wt-rm |
+| `worktreeLink` | string[] (repo-root paths) | `[".claude/settings.local.json", ".claude/.credentials.json"]` | wt-new (link), wt-rm (unlink) |
+| `postCreate` | string \| string[] | *(none)* | wt-new (→stderr), create SKILL |
+| `branchNaming` | `{ "embedIssueId": bool }` | `{ "embedIssueId": true }` | create SKILL / configure (prose only) |
+
+**`worktreeDir` template & validation:**
+- Tokens: `{parent}` (dir containing the main repo), `{repo}` (repo basename),
+  `{branch}` (branch slug). An **unknown `{token}` is an error** (fail loud, don't
+  emit a literal brace path).
+- `{branch}` slug: `/`→`-` (preserves today's behaviour).
+- A leading `~`/`$HOME` expands; a relative template resolves against `{parent}`.
+- The expanded path is normalised and **rejected if empty, or if it equals or
+  resolves inside the main checkout** (creating a worktree inside the main repo
+  would be catastrophic). The default reproduces today's sibling layout exactly.
+
+**`worktreeLink` rules:** entries are **repo-root-relative** (so `.env`,
+`mcp.json`, etc. can be mirrored, not just `.claude/` files). Each entry is
+normalised and **rejected if absolute, empty, or containing `..`**. On create:
+`mkdir -p` the destination's parent, then symlink **only when the source exists
+and the destination is absent**. On remove: delete **only a symlink whose target
+points back into the main repo** (never a real file/dir). Default preserves
+today's two `.claude/` files.
+
+**`postCreate` output contract:** `wt-new.sh` emits **one `postCreate: <cmd>` line
+to stderr per command** (a string → one line; an array → one line each), never
+runs them (protects the stdout-is-the-path contract). Tests assert this shape.
+
+**`branchNaming`** is **prose-only guidance**: `embedIssueId` changes how the
+`create-and-enter` SKILL prompts/derives a branch name. No script validates or
+enforces it.
 
 ## Architecture
 
@@ -75,20 +103,28 @@ A single shared resolver, sourced by both scripts and by the tests.
 
 **`tss-git-skills/lib/worktree-config.sh`** — pure, sourceable functions:
 `resolve_worktree_dir`, `resolve_worktree_link`, `resolve_post_create`,
-`resolve_branch_naming`. Each implements the global→committed→local→built-in read
-via `jq`, falling back to the built-in default when a marker or `jq` is absent or
-unparseable.
+`resolve_branch_naming`. Each implements the local→committed→global→built-in
+field resolution via `jq`, skipping absent/unparseable tiers.
 
 - Lives in a new top-level `lib/` (sibling to `skills/`), which Claude Code's
   depth-1 skill scan ignores.
 - **Testable by design:** functions take the **repo root as an argument** and
   honour an **overridable `HOME`**, so tests sandbox all three tiers in temp dirs
   without touching the real `~/.claude`.
-- Sourcing a bundled plugin file is safe with respect to the chpwd hazard that
-  motivated the scripts' self-containment — that was about `source ~/.zshrc`
-  triggering interactive shell hooks; this is `source <plugin-lib>` inside a
-  non-interactive `bash` script. Scripts resolve the lib relative to `$0` and
-  **fall back to built-in defaults if the lib is missing**.
+- Scripts locate the lib relative to **`${BASH_SOURCE[0]}`** (not `$0`, which is
+  unreliable when sourced or wrapped). Sourcing a bundled plugin file is safe with
+  respect to the chpwd hazard that motivated the scripts' self-containment — that
+  was about `source ~/.zshrc` triggering interactive shell hooks; this is
+  `source <plugin-lib>` inside a non-interactive `bash` script.
+- **The lib is a hard dependency** (it ships with the plugin). If it cannot be
+  sourced, the scripts **fail loud** with a clear "broken install" error — they do
+  **not** silently fall back to built-in defaults, because that could make
+  `wt-new` (configured) and `wt-rm` (defaulted) disagree on location. (Note
+  `wt-rm` finds the tree via `git worktree list` by branch first, which is
+  layout-independent; the `worktreeDir`-derived path is only a last-resort
+  fallback — but fail-loud removes the disagreement risk entirely.) "Fall back to
+  built-in defaults" applies only to **missing/empty config markers**, never to a
+  missing lib.
 
 ### Components touched
 
@@ -99,43 +135,48 @@ unparseable.
 | MOD | `skills/create-and-enter-worktree/scripts/wt-new.sh` | source lib; resolved `worktreeDir`/`worktreeLink`; emit `postCreate` to stderr |
 | MOD | `skills/exit-and-dispose-worktree/scripts/wt-rm.sh` | source lib; resolved `worktreeDir` (fallback path) + `worktreeLink` (unlink) |
 | MOD | `skills/create-and-enter-worktree/SKILL.md` | `postCreate` + branch-naming guidance |
-| NEW | `skills/configure-worktree/SKILL.md` (+ script) | guided `AskUserQuestion` setup that writes a marker tier |
-| MOD | setup SKILL + READMEs | document the global tier; list the new skill |
+| NEW | `skills/configure-worktree/SKILL.md` (+ script) | guided `AskUserQuestion` setup that writes a config-marker tier |
+| MOD | setup SKILL + READMEs | document the config marker family + global tier; list the new skill |
 
 ## Threads (each its own PR)
 
 ### C1 — config resolver foundation (PR1)
-- Create `lib/worktree-config.sh` with `resolve_worktree_dir` + `resolve_worktree_link`.
+- Create `lib/worktree-config.sh` with `resolve_worktree_dir` + `resolve_worktree_link`
+  (field-level tier resolution; absent/unparseable tier skipped; `${BASH_SOURCE[0]}`
+  anchor; fail-loud if lib missing).
 - `wt-new.sh`: source lib; replace hard-coded `dir=…worktrees/{branch}` with
-  resolved `worktreeDir` + token expansion; replace the hard-coded
+  resolved + validated `worktreeDir`; replace the hard-coded
   `for f in settings.local.json .credentials.json` link loop with resolved
-  `worktreeLink` (repo-root-relative).
+  `worktreeLink` (repo-root-relative, with the link rules above).
 - `wt-rm.sh`: source lib; resolved `worktreeDir` for the fallback path; resolved
-  `worktreeLink` for the unlink loop.
+  `worktreeLink` for the unlink loop (symlink-pointing-back-to-main check).
 - Add `tests/` + CI. **Absorbs B2.**
 
 ### C2 — postCreate + de-bias npm (PR2)
-- Add `resolve_post_create` to the lib; `wt-new.sh` emits the resolved command(s)
-  to **stderr** as a labelled note (e.g. `postCreate: npm install`), never runs
-  them — protects the stdout-is-the-path contract.
+- Add `resolve_post_create` to the lib; `wt-new.sh` emits one `postCreate: <cmd>`
+  line to stderr per command, never runs them.
 - `create-and-enter/SKILL.md`: replace the hard-coded "run `npm install`" in
   *After entering* with guidance to run whatever `wt-new.sh` printed in its
-  `postCreate:` note, if any (default empty → no note → no stack assumption).
+  `postCreate:` note(s), if any (default empty → no note → no stack assumption).
 
 ### C3 — `configure-worktree` skill (PR3)
 - New user-invoked skill (`disable-model-invocation: true`, like the other config
-  skills) that runs an `AskUserQuestion` flow and writes the chosen fields to the
-  chosen tier:
+  skills) that runs an `AskUserQuestion` flow and writes the chosen **config**
+  fields to the chosen tier of the **config** marker family:
   - Q1 location → `worktreeDir`; Q2 stack → `postCreate`; Q3 mirror →
-    `worktreeLink`; Q4 editable-on-main → `allowPaths`; Q5 **scope: global
-    (`~/.claude`) / committed (team) / local (just me)** — the three-way tier
-    picker.
-- Reuses `worktree-enforce`'s marker-writing/staging logic where possible.
+    `worktreeLink`; Q4 **scope: global (`~/.claude/worktree-config.json`) /
+    committed (team) / local (just me)** — the three-way tier picker.
+- It writes **only config files**. Enforcement (`enforce`/`allowPaths`) stays with
+  the existing `worktree-enforce` skill; `configure-worktree` points the user
+  there rather than touching the enforcement marker.
+- Reuses `worktree-enforce`'s marker-writing/staging helpers where possible
+  (committed file staged, local file gitignored).
 
 ### C4 — branch-naming (PR4)
-- `create-and-enter/SKILL.md`: document the `<type>/<N>-<slug>` convention and
-  slug resolution precedence (explicit → issue-id → infer → ask);
-  `configure-worktree` captures `branchNaming.embedIssueId`. **Closes #9.**
+- `create-and-enter/SKILL.md`: document the `<type>/<N>-<slug>` convention and slug
+  resolution precedence (explicit → issue-id → infer → ask); `configure-worktree`
+  captures `branchNaming.embedIssueId`. Prose-only; no script enforcement.
+  **Closes #9.**
 
 Branch-naming reference: conventional-commit types (`feat`/`fix` mandated;
 `docs`/`chore`/`refactor`/`perf`/`test`/`build`/`ci`/`style`/`revert`
@@ -156,13 +197,17 @@ Cases (unit tests, sourcing the lib directly):
   beats global; local beats committed.
 - field-level merge: a field set only in global resolves when committed defines
   *other* fields.
+- **malformed tier skipped:** an unparseable local file does not discard committed/
+  global values for a field.
 - `worktreeDir` token expansion: `{parent}`/`{repo}`/`{branch}`, `~` expansion,
-  branch slug `/`→`-`.
-- `worktreeLink`: default; override; repo-root-relative entry (e.g. `.env`).
-- `postCreate`: none / string / array.
+  branch slug `/`→`-`; unknown token errors; expansion inside the main checkout is
+  rejected.
+- `worktreeLink`: default; override; repo-root-relative entry (e.g. `.env`);
+  rejection of absolute/`..`/empty entries.
+- `postCreate`: none / string (one line) / array (one line each).
 - `branchNaming`: default `embedIssueId:true`; override.
-- robustness: marker absent or unparseable → built-in defaults (same guard as
-  `jq` missing).
+- robustness: config marker absent → built-in defaults; **lib missing → fail loud**
+  (distinct from missing markers).
 
 (Shellcheck is intentionally deferred to keep #9 focused.)
 
@@ -182,9 +227,14 @@ tracks the sub-PRs.
 
 ## Risks
 
-- **Regressing enforcement** — mitigated: the resolver never reads/writes
-  `enforce`; the hook is unchanged; CI + manual deny-probe confirm.
-- **Script self-containment** — mitigated: lib resolved relative to `$0` with a
-  built-in-default fallback if absent; no shell-init dependency.
-- **`worktreeDir`/`worktreeLink` drift between create and remove** — mitigated:
-  both read the same lib; tests assert identical resolution.
+- **Regressing enforcement** — eliminated by design: config lives in a separate
+  marker family the hook never reads; the hook and `enforce`/`allowPaths` logic
+  are unchanged. CI + a manual deny-probe still confirm.
+- **Script self-containment** — lib resolved via `${BASH_SOURCE[0]}`; lib is a
+  bundled hard dependency that fails loud if absent (no silent default), so no
+  shell-init dependency and no create/remove disagreement.
+- **`worktreeDir`/`worktreeLink` drift between create and remove** — both read the
+  same lib; tests assert identical resolution; `wt-rm` also finds the tree via
+  `git worktree list` (layout-independent) before any path construction.
+- **Unsafe `worktreeDir` expansion** — validated: unknown tokens error; path
+  rejected if empty or inside the main checkout.
