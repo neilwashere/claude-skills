@@ -78,6 +78,11 @@ printf '{\n  "enforce": true,\n  "allowPaths": ["CHANGELOG.md", ".changeset/**"]
 
 ## Validate
 
+The quickest check is **`worktree-enforce doctor`** — it audits the global wiring
+(registered / installed / executable / fresh / old-hook-gone / CLAUDE.md rule) and
+runs a live-deny smoke test that proves the hook actually fires, in one command.
+The manual checks below are the same assertions broken out:
+
 ```bash
 jq '.hooks.PreToolUse' ~/.claude/settings.json   # hook is registered
 
