@@ -74,7 +74,7 @@ If you only need to *read or edit* files in another worktree (not relocate the s
 
 ## After entering
 
-A fresh worktree does NOT share `node_modules` (npm workspaces). If your repo uses workspaces, run `npm install` in the worktree before relying on a local build or test run.
+A fresh worktree starts clean — it does not share `node_modules`, build caches, or other gitignored artifacts. If your repo configures `postCreate` (in `worktree-config.json`), `wt-new.sh` prints those commands on stderr as `postCreate: <cmd>` notes; run them in the worktree before relying on a local build or test run. (No `postCreate` configured → no notes; e.g. a Node repo would set `postCreate: "npm install"`.)
 
 ## Cleanup
 

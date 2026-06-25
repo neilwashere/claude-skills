@@ -216,6 +216,35 @@ test_wtnew_invalid_link_fails_loud() {
   rm -rf "$sb"
 }
 
+test_postcreate_absent() {
+  local sb; sb="$(new_sandbox)"
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo")" "" "absent postCreate → no output"
+  rm -rf "$sb"
+}
+test_postcreate_string() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"postCreate":"npm install"}'
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo")" "npm install" "string postCreate → one line"
+  rm -rf "$sb"
+}
+test_postcreate_array() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"postCreate":["npm ci","npm run build"]}'
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo" | paste -sd'|' -)" "npm ci|npm run build" "array postCreate → one line each"
+  rm -rf "$sb"
+}
+
+test_wtnew_emits_postcreate_to_stderr() {
+  local sb; sb="$(mktemp -d)"; local repo="$sb/repo"; mkdir -p "$repo/.claude"
+  ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"worktreeDir":"%s/trees/{branch}","postCreate":"npm install"}' "$sb" > "$repo/.claude/worktree-config.json"
+  local out err
+  out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>"$sb/err" )"
+  err="$(cat "$sb/err")"
+  assert_eq "$out" "$sb/trees/feat-x" "stdout is exactly the path (no postCreate leak)"
+  case "$err" in *"postCreate: npm install"*) printf 'PASS: %s\n' "postCreate note on stderr" ;; *) printf 'FAIL: postCreate note missing from stderr\n'; FAILED=1 ;; esac
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
