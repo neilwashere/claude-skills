@@ -77,6 +77,9 @@ Existing **worktrees** are untouched — dispose of them with `exit-and-dispose-
 jq '[.. | .command? // empty] | map(select(test("worktree-discipline.sh")))' ~/.claude/settings.json   # -> []
 # script gone:
 ls ~/.claude/hooks/worktree-discipline.sh 2>/dev/null && echo "STILL THERE" || echo "script removed"
+# the global rule section was actually stripped (Step 4):
+grep -q '^## Worktree discipline' ~/.claude/CLAUDE.md \
+  && echo "RULE STILL PRESENT — edit ~/.claude/CLAUDE.md by hand" || echo "rule removed: OK"
 # from the MAIN checkout of a previously-opted-in repo, a write is no longer denied —
 # editing a file there should now just work.
 ```

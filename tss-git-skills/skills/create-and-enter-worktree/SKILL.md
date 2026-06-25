@@ -36,13 +36,20 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/create-and-enter-worktree/scripts/wt-new.sh" 
 EnterWorktree({ path: "<the path wt-new.sh printed>" })
 ```
 
-The session is now in the worktree. **Step 3 — confirm:**
+The session is now in the worktree. **Step 3 — assert you actually relocated.** This is the whole point of the skill, so *check* it, don't eyeball it — `git-dir` and `git-common-dir` differ **only** inside a worktree:
 
 ```
-git rev-parse --git-dir          # .../.git/worktrees/<branch>
-git rev-parse --git-common-dir   # .../.git   ← differs ⇒ you are in the worktree
+# git-dir and git-common-dir resolve to the SAME real path only OUTSIDE a worktree.
+# Canonicalize before comparing: from a subdir the raw strings can differ (one
+# absolute, one relative) even in the main checkout (same approach as worktree-enforce).
+gd=$( (cd "$(git rev-parse --git-dir)" && pwd -P) )
+gc=$( (cd "$(git rev-parse --git-common-dir)" && pwd -P) )
+[ "$gd" != "$gc" ] && echo "in worktree: OK ($(git rev-parse --abbrev-ref HEAD))" \
+  || echo "NOT IN WORKTREE — EnterWorktree did not take; do NOT write files (they would land on main)"
 git status -sb
 ```
+
+If it prints `NOT IN WORKTREE`, **stop**: `EnterWorktree` was skipped or given the wrong path. Re-enter (`EnterWorktree({ path })`) before any file write — otherwise every edit pollutes the main checkout's active branch, the exact failure this skill exists to prevent.
 
 ## Already created a worktree but stuck on main?
 
