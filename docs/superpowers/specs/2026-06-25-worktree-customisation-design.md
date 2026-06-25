@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-25
 - **Issue:** [#9](https://github.com/neilwashere/claude-skills/issues/9)
-- **Status:** approved design (revised after codex review); implementation pending
+- **Status:** approved design (revised twice after codex review — all findings resolved); implementation pending
 
 ## Context
 
@@ -27,10 +27,13 @@ touching the enforcement mechanism**.
 
 ## Non-goals / boundaries
 
-- **Enforcement is untouched.** `enforce`/`allowPaths` and the
-  `worktree-discipline.sh` hook do not change. Config lives in **separate files**
-  the hook never reads (see below), so there is no path by which configuring a
-  worktree can alter deny behaviour.
+- **Enforcement behaviour is untouched.** The hook's deny logic and
+  `enforce`/`allowPaths` resolution do not change, and the hook never *reads*
+  config files. The one hook edit is a **one-line extension of its self-exemption
+  allow-list** (`is_allowed_path`) so the new `worktree-config*.json` files are
+  writable on an enforced main checkout — exactly as the discipline markers
+  already are. No path exists by which configuring a worktree alters deny
+  behaviour.
 - No shell-init / env-var configuration. All config lives in Claude-managed JSON
   files under `.claude/` and `~/.claude/`.
 - No configurable hook matcher, no auto-commit of markers, no defeating the
@@ -61,6 +64,18 @@ So a global `worktreeDir`, a committed `worktreeLink`, and a local `postCreate`
 all compose. The config family has no global-vs-repo restrictions because it
 never carries `enforce`/`allowPaths` (those stay repo-scoped in the enforcement
 family).
+
+**Repo-level config is read from the main checkout root.** The committed and
+local config files are resolved from the **main checkout** (`main_root` — the
+first entry of `git worktree list`), not the current worktree, so "just me" local
+config is stable regardless of which worktree you invoke from. The global tier is
+`~/.claude/worktree-config.json`.
+
+**Two marker families, by design.** Enforcement (`worktree-discipline*.json`,
+hook-owned) and worktree config (`worktree-config*.json`, resolver-owned) are
+deliberately separate files served by separate skills — `worktree-enforce` for
+enforcement, `configure-worktree` for config. One setup flow does not cover both;
+the docs should say so to set expectations.
 
 ### Config schema (`worktree-config.json`)
 
@@ -136,7 +151,8 @@ field resolution via `jq`, skipping absent/unparseable tiers.
 | MOD | `skills/exit-and-dispose-worktree/scripts/wt-rm.sh` | source lib; resolved `worktreeDir` (fallback path) + `worktreeLink` (unlink) |
 | MOD | `skills/create-and-enter-worktree/SKILL.md` | `postCreate` + branch-naming guidance |
 | NEW | `skills/configure-worktree/SKILL.md` (+ script) | guided `AskUserQuestion` setup that writes a config-marker tier |
-| MOD | setup SKILL + READMEs | document the config marker family + global tier; list the new skill |
+| MOD | `skills/setup-worktree-discipline/worktree-discipline.sh` | extend `is_allowed_path` to exempt the two `worktree-config*.json` files (deny logic unchanged) |
+| MOD | setup SKILL + READMEs | document the config marker family + global tier + installed-hook re-`cp`; list the new skill |
 
 ## Threads (each its own PR)
 
@@ -150,6 +166,10 @@ field resolution via `jq`, skipping absent/unparseable tiers.
   `worktreeLink` (repo-root-relative, with the link rules above).
 - `wt-rm.sh`: source lib; resolved `worktreeDir` for the fallback path; resolved
   `worktreeLink` for the unlink loop (symlink-pointing-back-to-main check).
+- `worktree-discipline.sh`: extend the `is_allowed_path` exemption case to also
+  allow `.claude/worktree-config.json` + `.local.json` (so config is writable on
+  an enforced main checkout; deny logic unchanged). Note the installed-hook
+  re-`cp` in the setup SKILL.
 - Add `tests/` + CI. **Absorbs B2.**
 
 ### C2 — postCreate + de-bias npm (PR2)
@@ -208,6 +228,8 @@ Cases (unit tests, sourcing the lib directly):
 - `branchNaming`: default `embedIssueId:true`; override.
 - robustness: config marker absent → built-in defaults; **lib missing → fail loud**
   (distinct from missing markers).
+- hook exemption: piping a `Write` event for `.claude/worktree-config.json` (and
+  `.local.json`) through the hook on an enforced main checkout returns allow.
 
 (Shellcheck is intentionally deferred to keep #9 focused.)
 
@@ -227,9 +249,10 @@ tracks the sub-PRs.
 
 ## Risks
 
-- **Regressing enforcement** — eliminated by design: config lives in a separate
-  marker family the hook never reads; the hook and `enforce`/`allowPaths` logic
-  are unchanged. CI + a manual deny-probe still confirm.
+- **Regressing enforcement** — config lives in a separate marker family the hook
+  never reads; the only hook change is extending its self-exemption allow-list
+  (deny logic and `enforce`/`allowPaths` resolution unchanged). The CI
+  hook-exemption test + a manual deny-probe confirm.
 - **Script self-containment** — lib resolved via `${BASH_SOURCE[0]}`; lib is a
   bundled hard dependency that fails loud if absent (no silent default), so no
   shell-init dependency and no create/remove disagreement.
