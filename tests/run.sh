@@ -93,6 +93,29 @@ test_dir_inside_main_rejected() {
   rm -rf "$sb"
 }
 
+test_link_default() {
+  local sb; sb="$(new_sandbox)"
+  assert_eq "$(HOME="$sb/home" wtc_worktree_link "$sb/repo" | paste -sd, -)" \
+    ".claude/settings.local.json,.claude/.credentials.json" "default link list"
+  rm -rf "$sb"
+}
+test_link_override_with_env() {
+  local sb; sb="$(new_sandbox)"
+  wcfg "$sb" '{"worktreeLink":[".claude/settings.local.json",".env"]}'
+  assert_eq "$(HOME="$sb/home" wtc_worktree_link "$sb/repo" | paste -sd, -)" \
+    ".claude/settings.local.json,.env" "override includes repo-root .env"
+  rm -rf "$sb"
+}
+_try_link() { HOME="$2" wtc_worktree_link "$1"; }
+test_link_rejects_absolute() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"worktreeLink":["/etc/passwd"]}'
+  assert_fails "absolute link entry rejected" _try_link "$sb/repo" "$sb/home"; rm -rf "$sb"
+}
+test_link_rejects_dotdot() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"worktreeLink":["../secret"]}'
+  assert_fails "'..' link entry rejected" _try_link "$sb/repo" "$sb/home"; rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"

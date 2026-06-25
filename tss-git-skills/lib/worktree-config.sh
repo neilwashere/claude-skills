@@ -67,3 +67,20 @@ wtc_worktree_dir() {
 
   printf '%s\n' "$norm"
 }
+
+# wtc_worktree_link <repo_root> → repo-root-relative link entries, one per line.
+wtc_worktree_link() {
+  local repo_root="$1" raw
+  raw="$(_wtc_field_raw "$repo_root" worktreeLink)" \
+    || raw='[".claude/settings.local.json",".claude/.credentials.json"]'
+  local entries e
+  mapfile -t entries < <(printf '%s' "$raw" | jq -r '.[]') || return 1
+  for e in "${entries[@]}"; do
+    case "$e" in
+      "")     echo "worktree-config: empty worktreeLink entry" >&2; return 1 ;;
+      /*)     echo "worktree-config: absolute worktreeLink entry not allowed: $e" >&2; return 1 ;;
+      *..*)   echo "worktree-config: '..' not allowed in worktreeLink entry: $e" >&2; return 1 ;;
+    esac
+    printf '%s\n' "$e"
+  done
+}
