@@ -74,6 +74,8 @@ printf '{\n  "enforce": true,\n  "allowPaths": ["CHANGELOG.md", ".changeset/**"]
 - **`allowPaths`** — globs (relative to repo root) you may still edit on the main checkout (release files, etc.). The marker itself and `.git/` are always allowed.
 - **Temporary escape** — to write directly on main in a checkout without changing committed config, add a gitignored `.claude/worktree-discipline.local.json` with `{"enforce": false}`. It overrides the committed marker. Add `worktree-discipline.local.json` to the repo's `.gitignore`.
 
+**Separate config marker family** — worktree *creation* settings (where `wt-new` places the tree, which symlinks it seeds, etc.) live in a **distinct** three-tier family: `.claude/worktree-config.json` (committed) / `.claude/worktree-config.local.json` (gitignored override) / `~/.claude/worktree-config.json` (global). These are read by `wt-new`/`wt-rm` and are unrelated to enforcement. See `docs/superpowers/specs/2026-06-25-worktree-customisation-design.md` for the full field reference.
+
 ## Validate
 
 ```bash
@@ -108,6 +110,8 @@ chmod +x ~/.claude/hooks/worktree-discipline.sh
 ```
 
 No reload needed — the hook command re-reads the file on every tool call. `worktree-enforce status` detects this drift: it prints **STALE** (with the exact `cp` to run) when the installed copy differs from the plugin's bundled hook, **MISSING** if the registered file is gone, else plain **installed**.
+
+> **This version's hook also exempts `worktree-config*.json`** (the config marker family used by `wt-new`/`wt-rm`). If you upgraded the plugin, re-run the `cp` above to pick up this change.
 
 **Two independent staleness sources after you push a hook fix** — easy to conflate:
 
