@@ -96,3 +96,14 @@ wtc_worktree_link() {
     printf '%s\n' "$e"
   done
 }
+
+# wtc_branch_naming <repo_root> → "true"/"false" for branchNaming.embedIssueId
+# (default "true" when unset). Advisory: tells branch-name selection whether to
+# embed an issue number. Resolution only — does not enforce anything.
+wtc_branch_naming() {
+  local repo_root="$1" raw
+  raw="$(_wtc_field_raw "$repo_root" branchNaming)" || { echo "true"; return 0; }
+  # NB: `.embedIssueId // true` is wrong — jq's // treats false as empty, so it
+  # would flip a configured false to true. Default only when the key is absent.
+  printf '%s' "$raw" | jq -r 'if .embedIssueId == null then true else .embedIssueId end'
+}

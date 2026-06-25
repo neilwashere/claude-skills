@@ -20,6 +20,27 @@ So we create with the script, then enter by **path**. (`EnterWorktree({path})` a
 
 The design spec, the plan, the code, and the wrap-up docs are ALL authored in the worktree and reach `main` only via the feature's PR. Writing them in the main checkout pollutes the active branch — and when a second feature spins up it can add files to a branch the first one owns.
 
+## Choosing a branch name
+
+Name the branch `<type>/<slug>` — a conventional-commit type, then a short slug:
+
+- **type** — the conventional-commit corpus: `feat` and `fix` (mandated), plus `docs`, `chore`, `refactor`, `perf`, `test`, `build`, `ci`, `style`, `revert`. Use `fix`, never `bug`.
+- **slug** — resolve in this order:
+  1. an explicit name the caller gave → use it verbatim;
+  2. an issue/ticket reference → `<type>/<N>-<slug-from-title>`, embedding the number (GitHub `#9` → `feat/9-configure-worktree`) — **unless** the repo opts out (see below);
+  3. otherwise infer a kebab-case slug from the task;
+  4. if still ambiguous, ask.
+
+Before embedding an issue number, honor the repo's `branchNaming.embedIssueId` (default `true`):
+
+```
+. "${CLAUDE_PLUGIN_ROOT}/lib/worktree-config.sh"; wtc_branch_naming "$(git rev-parse --show-toplevel)"
+```
+
+`true` → embed the number; `false` → omit it (e.g. `feat/configure-worktree`). Set this with `configure-worktree`.
+
+`wt-new.sh` slugs `/` → `-` for the directory only, so `feat/9-x` lives at `…/feat-9-x` while the branch keeps the slash.
+
 ## The flow
 
 **Step 1 — create (Bash, run from the main checkout).** Its stdout is *exactly* the worktree path; progress goes to stderr.
