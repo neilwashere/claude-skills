@@ -151,6 +151,25 @@ test_wtrm_removes_configured_dir() {
   rm -rf "$sb"
 }
 
+test_hook_exempts_config_markers() {
+  local sb; sb="$(mktemp -d)"; local repo="$sb/repo"; mkdir -p "$repo/.claude"
+  ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$repo/.claude/worktree-discipline.json"   # enforced main checkout
+  local hook="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+  local ev
+  for name in worktree-config.json worktree-config.local.json; do
+    ev="$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s/.claude/%s"}}' "$repo" "$name")"
+    out="$( cd "$repo" && printf '%s' "$ev" | bash "$hook" 2>/dev/null )"
+    case "$out" in
+      *'"permissionDecision":"deny"'*|*'"permissionDecision": "deny"'*)
+        printf 'FAIL: hook denied .claude/%s on enforced main\n' "$name"; FAILED=1 ;;
+      *) printf 'PASS: hook allows .claude/%s\n' "$name" ;;
+    esac
+  done
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
