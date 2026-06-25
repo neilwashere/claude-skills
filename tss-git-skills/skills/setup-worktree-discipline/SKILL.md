@@ -12,6 +12,8 @@ What it enforces (in a repo that has opted in): all feature work happens in a gi
 
 It is **opt-in per repo** and off by default everywhere. See `worktree-discipline.sh` (this skill dir) for the exact decision table.
 
+**The Bash layer is best-effort.** Write/Edit/NotebookEdit into the main checkout are blocked robustly; for **Bash** the hook additionally scans for `>` / `>>` / `tee` / `sed -i` writes that resolve into the tree. That scan is heuristic and can false-positive on a command that merely *contains* a literal `>` — a regex, `grep -E`, a heredoc, an `awk`/`perl` one-liner (`=>` and `->` are already special-cased, but other `>` uses are not). If a benign Bash command is wrongly denied, rephrase it to avoid the literal `>`, or run it from a worktree. The Write/Edit block is the real guard; the Bash scan is a backstop, not a complete one.
+
 ## Install
 
 **1. Install the hook script.** Copy the bundled hook to the global hooks dir and make it executable:
@@ -106,6 +108,11 @@ chmod +x ~/.claude/hooks/worktree-discipline.sh
 ```
 
 No reload needed — the hook command re-reads the file on every tool call. `worktree-enforce status` detects this drift: it prints **STALE** (with the exact `cp` to run) when the installed copy differs from the plugin's bundled hook, **MISSING** if the registered file is gone, else plain **installed**.
+
+**Two independent staleness sources after you push a hook fix** — easy to conflate:
+
+1. **The plugin cache** (the marketplace's copy of the plugin) only advances on a Claude Code **restart** with `autoUpdate` — `/reload-plugins` does **not** pull a new commit. And it only auto-updates at all for a **GitHub-source** marketplace with `autoUpdate: true` and no stray `path` on the source entry; a **directory-source** marketplace (`/plugin marketplace add /path/to/checkout`) is git-synced live, so local edits flow through immediately.
+2. **The installed hook copy** in `~/.claude/hooks/` never advances automatically (Step 1 *copied* it) — re-run the `cp` above. This is the one `worktree-enforce status` flags as **STALE**.
 
 ## Removing it
 
