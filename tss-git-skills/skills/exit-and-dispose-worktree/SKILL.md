@@ -40,9 +40,13 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <
 Disposal is destructive and has silent failure modes — the Step 1 `ExitWorktree` is a no-op if no session was active (so you might still be effectively in the tree), and removing a tree you were still sitting in can leave a `prunable` stub. Assert the end-state:
 
 ```
-# Back in the main checkout?  (git-dir == git-common-dir only OUTSIDE a worktree)
-[ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ] \
-  && echo "back in main: OK" || echo "STILL IN A WORKTREE — run ExitWorktree({action: \"keep\"}) first"
+# Back in the main checkout? git-dir and git-common-dir resolve to the SAME real
+# path only OUTSIDE a worktree — canonicalize before comparing (raw strings can
+# differ from a subdir even in main; same approach as worktree-enforce).
+gd=$( (cd "$(git rev-parse --git-dir)" && pwd -P) )
+gc=$( (cd "$(git rev-parse --git-common-dir)" && pwd -P) )
+[ "$gd" = "$gc" ] && echo "back in main: OK" \
+  || echo "STILL IN A WORKTREE — run ExitWorktree({action: \"keep\"}) first"
 # The tree is actually gone (substitute the branch's dir slug — '/' becomes '-'):
 git worktree list --porcelain | grep -q "\.worktrees/<branch-dir>" \
   && echo "DISPOSAL FAILED — worktree still registered" || echo "tree gone: OK"

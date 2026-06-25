@@ -39,7 +39,11 @@ EnterWorktree({ path: "<the path wt-new.sh printed>" })
 The session is now in the worktree. **Step 3 — assert you actually relocated.** This is the whole point of the skill, so *check* it, don't eyeball it — `git-dir` and `git-common-dir` differ **only** inside a worktree:
 
 ```
-gd=$(git rev-parse --git-dir); gc=$(git rev-parse --git-common-dir)
+# git-dir and git-common-dir resolve to the SAME real path only OUTSIDE a worktree.
+# Canonicalize before comparing: from a subdir the raw strings can differ (one
+# absolute, one relative) even in the main checkout (same approach as worktree-enforce).
+gd=$( (cd "$(git rev-parse --git-dir)" && pwd -P) )
+gc=$( (cd "$(git rev-parse --git-common-dir)" && pwd -P) )
 [ "$gd" != "$gc" ] && echo "in worktree: OK ($(git rev-parse --abbrev-ref HEAD))" \
   || echo "NOT IN WORKTREE — EnterWorktree did not take; do NOT write files (they would land on main)"
 git status -sb
