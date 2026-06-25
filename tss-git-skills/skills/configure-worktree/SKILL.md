@@ -39,8 +39,8 @@ one.
    - *Claude only (default)* — **omit `worktreeLink`.**
    - *Claude + env* — `[".claude/settings.local.json", ".claude/.credentials.json", ".env"]`.
    - *Custom* — ask for repo-root-relative paths; set `worktreeLink`.
-4. **Branch naming** (`branchNaming.embedIssueId`) — "Embed the issue/ticket number in branch names?"
-   - *Yes (default)* — **omit `branchNaming`** (the default is `embedIssueId: true`).
+4. **Branch naming** (`branchNaming.embedIssueId`) — "Embed the issue/ticket number in branch names?" (always write the explicit choice here — merging never deletes, so omitting can't turn a prior `false` back on)
+   - *Yes (default)* — set `branchNaming` to `{"embedIssueId": true}`.
    - *No* — set `branchNaming` to `{"embedIssueId": false}`.
 5. **Scope** — "Where should this config live?"
    - *Global* — `~/.claude/worktree-config.json` (all your repos). Scope = `global`.

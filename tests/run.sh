@@ -303,6 +303,24 @@ test_configure_bad_json() {
   rm -rf "$sb"
 }
 
+test_branchnaming_default_true() {
+  local sb; sb="$(new_sandbox)"
+  assert_eq "$(HOME="$sb/home" wtc_branch_naming "$sb/repo")" "true" "branchNaming default → true"
+  rm -rf "$sb"
+}
+test_branchnaming_false_honored() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"branchNaming":{"embedIssueId":false}}'
+  assert_eq "$(HOME="$sb/home" wtc_branch_naming "$sb/repo")" "false" "configured embedIssueId false honored"
+  rm -rf "$sb"
+}
+test_branchnaming_local_overrides_committed() {
+  local sb; sb="$(new_sandbox)"
+  wcfg "$sb" '{"branchNaming":{"embedIssueId":false}}'
+  wcfg_local "$sb" '{"branchNaming":{"embedIssueId":true}}'
+  assert_eq "$(HOME="$sb/home" wtc_branch_naming "$sb/repo")" "true" "local branchNaming overrides committed"
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
