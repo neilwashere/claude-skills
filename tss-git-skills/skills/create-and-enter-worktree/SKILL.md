@@ -10,7 +10,7 @@ A **compound** workflow: create a sibling git worktree **and** relocate the sess
 - `wt-new.sh` (bundled) creates `<repo-parent>/<repo>.worktrees/<branch>` off `origin/<default>` and links `.claude` context + gitignored creds — but a script **cannot** move the session.
 - The harness **`EnterWorktree` tool** is the only thing that relocates the session's cwd — but its own `name` mode only creates under `.claude/worktrees/`, not the sibling layout.
 
-So we create with the script, then enter by **path**. (`EnterWorktree({path})` accepts any worktree in `git worktree list`, including a sibling — verified.)
+So we create with the script, then enter by **path**. (`EnterWorktree({path})` accepts any worktree in `git worktree list` — verified **from the main checkout**; for the worktree→sibling caveat see *Switching between worktrees* below.)
 
 ## Why you cannot just `cd`
 
@@ -36,6 +36,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/create-and-enter-worktree/scripts/wt-new.sh" 
 EnterWorktree({ path: "<the path wt-new.sh printed>" })
 ```
 
+Pass the **exact single line** `wt-new.sh` wrote to stdout — don't reconstruct the path from the branch name (the directory slug encodes `/` as `-`, so `feat/x` lives at `…/feat-x`), and don't pipe `wt-new.sh` through anything that could prepend to its output. Progress notes go to stderr precisely to keep that one stdout line clean.
+
 The session is now in the worktree. **Step 3 — assert you actually relocated.** This is the whole point of the skill, so *check* it, don't eyeball it — `git-dir` and `git-common-dir` differ **only** inside a worktree:
 
 ```
@@ -58,6 +60,17 @@ If a worktree exists (you or a prior step ran `git worktree add` / `wt-new.sh`) 
 ```
 EnterWorktree({ path: "<existing worktree path from `git worktree list`>" })
 ```
+
+## Switching between worktrees
+
+`EnterWorktree({ path })` relocates **from the main checkout into a worktree**. It will **not** hop directly from one worktree into a sibling — you get `Cannot enter worktree: …/.claude/worktrees does not exist`. To switch features, return to the main checkout first, then enter the other tree:
+
+```
+ExitWorktree({ action: "keep" })          # back to the main checkout
+EnterWorktree({ path: "<other worktree path>" })
+```
+
+If you only need to *read or edit* files in another worktree (not relocate the session), don't switch at all — use `git -C <other-tree> …` with absolute paths.
 
 ## After entering
 
