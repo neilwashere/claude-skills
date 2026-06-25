@@ -88,6 +88,14 @@ existing="$(git -C "$main_root" worktree list --porcelain \
 if [[ -n "$existing" && -d "$existing" ]]; then
   link_claude "$existing" "$main_root"
   echo "Existing worktree: $existing" >&2
+  # Surface (do NOT run) configured post-create commands, one per line, to stderr.
+  pc="$(wtc_post_create "$main_root")" || true
+  if [ -n "$pc" ]; then
+    while IFS= read -r cmd; do
+      [ -n "$cmd" ] || continue
+      echo "postCreate: $cmd" >&2
+    done <<< "$pc"
+  fi
   echo "$existing"
   exit 0
 fi
@@ -126,4 +134,12 @@ fi
 
 link_claude "$dir" "$main_root"
 echo "Worktree ready at $dir (based on $base_ref)" >&2
+# Surface (do NOT run) configured post-create commands, one per line, to stderr.
+pc="$(wtc_post_create "$main_root")" || true
+if [ -n "$pc" ]; then
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    echo "postCreate: $cmd" >&2
+  done <<< "$pc"
+fi
 echo "$dir"
