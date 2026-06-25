@@ -65,6 +65,10 @@ fi
 wt_link="$HOME/.claude/projects/$(encode_path "$dir")"
 [[ -L "$wt_link" ]] && rm "$wt_link" && echo "Claude context symlink removed"
 main_real="$(cd "$main_root" && pwd -P)"
+links=""
+if ! links="$(wtc_worktree_link "$main_root")"; then
+  echo "wt-rm: invalid worktreeLink config" >&2; exit 1
+fi
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
   local_dst="$dir/$rel"
@@ -72,7 +76,7 @@ while IFS= read -r rel; do
     tgt="$(readlink "$local_dst")"
     case "$tgt" in "$main_real"/*|"$main_root"/*) rm "$local_dst" ;; esac
   fi
-done < <(wtc_worktree_link "$main_root")
+done <<< "$links"
 
 git -C "$main_root" worktree remove ${force:+--force} "$dir"
 echo "Worktree removed: $dir"

@@ -57,7 +57,10 @@ link_claude() {
   if [[ -d "$main_link" && ! -e "$wt_link" ]]; then
     ln -s "$main_link" "$wt_link" && echo "Claude context linked to main repo" >&2
   fi
-  local rel src dst
+  local rel src dst links
+  if ! links="$(wtc_worktree_link "$main_abs")"; then
+    echo "wt-new: invalid worktreeLink config" >&2; exit 1
+  fi
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
     src="$main_abs/$rel"; dst="$wt_abs/$rel"
@@ -65,7 +68,7 @@ link_claude() {
       mkdir -p "$(dirname "$dst")"
       ln -s "$src" "$dst" && echo "$rel linked to main repo" >&2
     fi
-  done < <(wtc_worktree_link "$main_abs")
+  done <<< "$links"
 }
 
 # Resolve the MAIN repo root (first worktree in the list is always the main
@@ -73,6 +76,11 @@ link_claude() {
 main_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
 [[ -n "$main_root" ]] || { echo "wt-new: not inside a git repository" >&2; exit 1; }
 dir="$(wtc_worktree_dir "$main_root" "$branch")" || exit 1
+
+# Pre-validate worktreeLink config before touching the filesystem — fail loud
+# here so we never create a partial worktree with a broken link config.
+_wtnew_links="$(wtc_worktree_link "$main_root")" \
+  || { echo "wt-new: invalid worktreeLink config" >&2; exit 1; }
 
 # Already registered for this branch? Ensure links, report, done.
 existing="$(git -C "$main_root" worktree list --porcelain \

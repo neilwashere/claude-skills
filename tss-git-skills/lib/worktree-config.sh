@@ -30,9 +30,13 @@ _wtc_field_raw() {
 
 # wtc_worktree_dir <repo_root> <branch> → absolute resolved worktree dir.
 wtc_worktree_dir() {
-  local repo_root="$1" branch="$2" tmpl
-  tmpl="$(_wtc_field_raw "$repo_root" worktreeDir | jq -r '.' 2>/dev/null)" || tmpl=""
-  [ -n "$tmpl" ] || tmpl='{parent}/{repo}.worktrees/{branch}'
+  local repo_root="$1" branch="$2" tmpl raw
+  if raw="$(_wtc_field_raw "$repo_root" worktreeDir)"; then
+    tmpl="$(printf '%s' "$raw" | jq -r '.')"
+    [ -n "$tmpl" ] || { echo "worktree-config: worktreeDir is empty" >&2; return 1; }
+  else
+    tmpl='{parent}/{repo}.worktrees/{branch}'
+  fi
 
   local repo parent slug
   repo="$(basename "$repo_root")"

@@ -195,6 +195,27 @@ test_wtnew_links_without_claude_dir() {
   rm -rf "$sb"
 }
 
+test_dir_empty_value_errors() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"worktreeDir":""}'
+  assert_fails "empty worktreeDir value errors" _try_dir "$sb/repo" "$sb/home" main
+  rm -rf "$sb"
+}
+
+test_wtnew_invalid_link_fails_loud() {
+  local sb; sb="$(mktemp -d)"
+  local repo="$sb/repo"; mkdir -p "$repo/.claude"
+  ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  mkdir -p "$sb/home/.claude"
+  printf '{"worktreeDir":"%s/trees/{branch}","worktreeLink":["/etc/passwd"]}' "$sb" \
+    > "$sb/home/.claude/worktree-config.json"
+  assert_fails "wt-new fails on invalid worktreeLink config" bash -c \
+    'cd "'"$repo"'" && HOME="'"$sb/home"'" bash "'"$ROOT"'/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null'
+  [ ! -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "wt-new did not create worktree dir on invalid link config" \
+    || { printf 'FAIL: worktree dir was created despite invalid link config\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
