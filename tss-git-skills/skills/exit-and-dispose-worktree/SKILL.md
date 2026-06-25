@@ -29,11 +29,11 @@ The session is now back in the main checkout. (If `ExitWorktree` reports no acti
 **Step 2 — dispose the tree (Bash, from the main checkout):**
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <branch> [--force]
-git branch -d <branch>    # delete the merged branch (optional tidy-up)
+bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <branch> [--force] \
+  && git branch -d <branch>    # delete the merged branch — only if removal succeeded
 ```
 
-`wt-rm.sh` unlinks the Claude context, then removes the worktree, with the dirty/unpushed guard above.
+`wt-rm.sh` unlinks the Claude context, then removes the worktree, with the dirty/unpushed guard above. The `&&` matters: `wt-rm.sh` exits non-zero when it refuses a dirty/unpushed tree, so chaining the branch delete behind it stops a confusing half-done state where the branch is gone but the worktree is still on disk.
 
 ## Just want to leave, not dispose?
 
