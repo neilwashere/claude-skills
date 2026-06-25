@@ -72,6 +72,14 @@ wtc_worktree_dir() {
   printf '%s\n' "$norm"
 }
 
+# wtc_post_create <repo_root> → each post-create command on its own line.
+# Prints nothing (rc 0) when postCreate is absent. Never executes anything.
+wtc_post_create() {
+  local repo_root="$1" raw
+  raw="$(_wtc_field_raw "$repo_root" postCreate)" || return 0
+  printf '%s' "$raw" | jq -r 'if type=="array" then .[] else . end'
+}
+
 # wtc_worktree_link <repo_root> → repo-root-relative link entries, one per line.
 wtc_worktree_link() {
   local repo_root="$1" raw

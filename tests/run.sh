@@ -216,6 +216,22 @@ test_wtnew_invalid_link_fails_loud() {
   rm -rf "$sb"
 }
 
+test_postcreate_absent() {
+  local sb; sb="$(new_sandbox)"
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo")" "" "absent postCreate → no output"
+  rm -rf "$sb"
+}
+test_postcreate_string() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"postCreate":"npm install"}'
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo")" "npm install" "string postCreate → one line"
+  rm -rf "$sb"
+}
+test_postcreate_array() {
+  local sb; sb="$(new_sandbox)"; wcfg "$sb" '{"postCreate":["npm ci","npm run build"]}'
+  assert_eq "$(HOME="$sb/home" wtc_post_create "$sb/repo" | paste -sd'|' -)" "npm ci|npm run build" "array postCreate → one line each"
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
