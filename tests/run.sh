@@ -170,6 +170,24 @@ test_hook_exempts_config_markers() {
   rm -rf "$sb"
 }
 
+test_hook_denies_new_subdir_write() {
+  local sb; sb="$(mktemp -d)"; local repo="$sb/repo"; mkdir -p "$repo/.claude"
+  ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$repo/.claude/worktree-discipline.json"   # enforced main checkout
+  local hook="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+  # The target file's parent dir (newdir/) does NOT exist yet.
+  local ev out
+  ev="$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s/newdir/x.txt"}}' "$repo")"
+  out="$( cd "$repo" && printf '%s' "$ev" | bash "$hook" 2>/dev/null )"
+  case "$out" in
+    *'"permissionDecision":"deny"'*|*'"permissionDecision": "deny"'*)
+      printf 'PASS: %s\n' "new-subdir write denied on enforced main" ;;
+    *) printf 'FAIL: new-subdir write NOT denied (enforcement bypass)\n'; FAILED=1 ;;
+  esac
+  rm -rf "$sb"
+}
+
 test_wtnew_links_without_claude_dir() {
   local sb; sb="$(mktemp -d)"
   local repo="$sb/repo"; mkdir -p "$repo"

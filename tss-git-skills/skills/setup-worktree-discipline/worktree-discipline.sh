@@ -72,6 +72,11 @@ esac
 # ---------------------------------------------------------------------------
 # 2. Locate the repo and detect worktree vs main checkout.
 # ---------------------------------------------------------------------------
+# A Write/Edit may target a not-yet-existing directory (e.g. creating a file in
+# a brand-new subdir). Walk TARGET_DIR up to the nearest existing ancestor so the
+# `cd` below succeeds and enforcement still applies — otherwise a failing `cd`
+# would hit `|| exit 0` and silently allow the write (enforcement bypass).
+while [ -n "$TARGET_DIR" ] && [ ! -d "$TARGET_DIR" ]; do TARGET_DIR=$(dirname "$TARGET_DIR"); done
 TOPLEVEL=$(cd "$TARGET_DIR" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || exit 0
 GIT_DIR=$(cd "$TARGET_DIR" 2>/dev/null && git rev-parse --git-dir 2>/dev/null) || exit 0
 GIT_COMMON=$(cd "$TARGET_DIR" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || exit 0
