@@ -283,6 +283,14 @@ test_configure_global() {
   assert_eq "$(jq -r '.worktreeDir' "$sb/home/.claude/worktree-config.json")" "G/{branch}" "global file written under HOME"
   rm -rf "$sb"
 }
+test_configure_global_outside_repo() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/nongit" "$sb/home"
+  ( cd "$sb/nongit" && printf '{"worktreeDir":"G/{branch}"}' | HOME="$sb/home" bash "$CFG" global ) >/dev/null 2>&1
+  local rc=$?
+  assert_eq "$rc" "0" "global config succeeds outside a git repo"
+  assert_eq "$(jq -r '.worktreeDir' "$sb/home/.claude/worktree-config.json")" "G/{branch}" "global config written outside a git repo"
+  rm -rf "$sb"
+}
 _cfg_try() { printf '%s' "$3" | HOME="$2" bash "$CFG" "$1"; }
 test_configure_bad_scope() {
   local sb; sb="$(mktemp -d)"

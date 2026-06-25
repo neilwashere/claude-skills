@@ -18,9 +18,12 @@ printf '%s' "$payload" | jq -e 'type == "object"' >/dev/null 2>&1 \
   || { echo "configure-worktree: stdin must be a JSON object" >&2; exit 2; }
 
 # committed/local land at the MAIN checkout root (where the resolver reads them).
-main_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
-if [ "$scope" != "global" ] && [ -z "$main_root" ]; then
-  echo "configure-worktree: not inside a git repository" >&2; exit 1
+# Resolve only when needed — global config works anywhere, including outside a
+# git repo, so don't let the (failing) git call abort under `set -e` there.
+main_root=""
+if [ "$scope" != "global" ]; then
+  main_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')" || true
+  [ -n "$main_root" ] || { echo "configure-worktree: not inside a git repository" >&2; exit 1; }
 fi
 
 case "$scope" in
