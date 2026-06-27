@@ -52,8 +52,9 @@ encode_path() { printf '%s' "$1" | tr '/.' '-'; }
 link_claude() {
   local wt_abs="$1" main_abs="$2"
   local base="$HOME/.claude/projects"
-  local main_link="$base/$(encode_path "$main_abs")"
-  local wt_link="$base/$(encode_path "$wt_abs")"
+  local main_link wt_link
+  main_link="$base/$(encode_path "$main_abs")"
+  wt_link="$base/$(encode_path "$wt_abs")"
   if [[ -d "$main_link" && ! -e "$wt_link" ]]; then
     ln -s "$main_link" "$wt_link" && echo "Claude context linked to main repo" >&2
   fi
