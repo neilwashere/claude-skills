@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
-# shellcheck disable=SC2317,SC2329,SC2016
+# shellcheck disable=SC2317,SC2329,SC2016,SC2015
 #   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
 #     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
 #   SC2016: literal $HOME in printf strings (writing JSON settings files)
-#   SC2015: suppressed per-line at the A && printf PASS || { printf FAIL } sites
+#   SC2015: A && printf PASS || { printf FAIL } pattern is intentional —
+#     the printf always succeeds so the || branch is correct
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
@@ -130,7 +131,6 @@ test_wtnew_uses_configured_dir() {
   local out
   out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null )"
   assert_eq "$out" "$sb/trees/feat-x" "wt-new creates worktree at configured dir"
-  # shellcheck disable=SC2015
   [ -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "configured worktree dir exists" || { printf 'FAIL: configured dir missing\n'; FAILED=1; }
   rm -rf "$sb"
 }
@@ -152,7 +152,6 @@ test_wtrm_removes_configured_dir() {
   printf '{"worktreeDir":"%s/trees/{branch}"}' "$sb" > "$repo/.claude/worktree-config.json"
   ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
   ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" feat/x ) >/dev/null 2>&1
-  # shellcheck disable=SC2015
   [ ! -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "wt-rm removed configured-dir worktree" \
     || { printf 'FAIL: configured-dir worktree still present\n'; FAILED=1; }
   rm -rf "$sb"
@@ -236,7 +235,6 @@ test_wtnew_invalid_link_fails_loud() {
     > "$sb/home/.claude/worktree-config.json"
   assert_fails "wt-new fails on invalid worktreeLink config" bash -c \
     'cd "'"$repo"'" && HOME="'"$sb/home"'" bash "'"$ROOT"'/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null'
-  # shellcheck disable=SC2015
   [ ! -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "wt-new did not create worktree dir on invalid link config" \
     || { printf 'FAIL: worktree dir was created despite invalid link config\n'; FAILED=1; }
   rm -rf "$sb"
@@ -283,7 +281,6 @@ test_configure_committed_writes_and_stages() {
   local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
   ( cd "$repo" && printf '{"worktreeDir":"X/{branch}"}' | HOME="$sb/home" bash "$CFG" committed ) >/dev/null 2>&1
   assert_eq "$(jq -r '.worktreeDir' "$repo/.claude/worktree-config.json")" "X/{branch}" "committed worktreeDir written"
-  # shellcheck disable=SC2015
   ( cd "$repo" && git diff --cached --name-only ) | grep -qx ".claude/worktree-config.json" \
     && printf 'PASS: %s\n' "committed file staged" || { printf 'FAIL: committed file not staged\n'; FAILED=1; }
   rm -rf "$sb"
@@ -300,7 +297,6 @@ test_configure_local_gitignores() {
   local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
   ( cd "$repo" && printf '{"postCreate":"npm install"}' | HOME="$sb/home" bash "$CFG" local ) >/dev/null 2>&1
   assert_eq "$(jq -r '.postCreate' "$repo/.claude/worktree-config.local.json")" "npm install" "local file written"
-  # shellcheck disable=SC2015
   grep -qx ".claude/worktree-config.local.json" "$repo/.gitignore" \
     && printf 'PASS: %s\n' "local file gitignored" || { printf 'FAIL: local not gitignored\n'; FAILED=1; }
   rm -rf "$sb"
@@ -370,11 +366,8 @@ _doctor_wired_sandbox() {
 test_doctor_all_pass_when_wired() {
   local sb; sb="$(_doctor_wired_sandbox)"
   local out; out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"
-  # shellcheck disable=SC2015
   echo "$out" | grep -Eq 'live deny:.*PASS'   && printf 'PASS: %s\n' "doctor live-deny PASS when wired" || { printf 'FAIL: doctor live-deny not PASS\n%s\n' "$out"; FAILED=1; }
-  # shellcheck disable=SC2015
   echo "$out" | grep -Eq 'hook fresh:.*PASS'  && printf 'PASS: %s\n' "doctor hook-fresh PASS when wired" || { printf 'FAIL: doctor hook-fresh not PASS\n'; FAILED=1; }
-  # shellcheck disable=SC2015
   echo "$out" | grep -Eq 'CLAUDE.md rule:.*PASS' && printf 'PASS: %s\n' "doctor CLAUDE.md-rule PASS when wired" || { printf 'FAIL: doctor CLAUDE.md-rule not PASS\n'; FAILED=1; }
   rm -rf "$sb"
 }
@@ -385,7 +378,6 @@ test_doctor_flags_problems_in_bare_home() {
   local out rc
   out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"; rc=$?
   assert_eq "$rc" "0" "doctor exits 0 even with nothing wired"
-  # shellcheck disable=SC2015
   echo "$out" | grep -Eq 'hook registered:.*FAIL' && printf 'PASS: %s\n' "doctor flags unregistered hook" || { printf 'FAIL: doctor did not flag missing registration\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
 }
@@ -394,7 +386,6 @@ test_doctor_detects_stale_hook() {
   local sb; sb="$(_doctor_wired_sandbox)"
   printf '\n# drift\n' >> "$sb/home/.claude/hooks/worktree-discipline.sh"   # make installed differ from bundled
   local out; out="$( cd "$sb/repo" && HOME="$sb/home" bash "$WTE" doctor 2>&1 )"
-  # shellcheck disable=SC2015
   echo "$out" | grep -Eq 'hook fresh:.*STALE' && printf 'PASS: %s\n' "doctor detects a stale installed hook" || { printf 'FAIL: doctor did not detect stale hook\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
 }
