@@ -18,48 +18,13 @@ This removes worktree-discipline **entirely** — it does not resurrect the olde
 
 **1. Opt your repos out first (optional but tidy).** While the `worktree-enforce` helper is still installed, run `worktree-enforce out` in each repo you opted in (it handles committed vs. local markers correctly). Skipping this is safe — the marker files become inert the moment the hook is gone — but it leaves `.claude/worktree-discipline*.json` behind in those repos. See **Per-repo markers** below.
 
-**2. Deregister the hook from `~/.claude/settings.json`.** Back up first, then filter out every PreToolUse hook whose command references the script (this preserves any other hooks you've co-located, and drops a matcher group only once it's empty):
+**2. Run the teardown script.** This deregisters the hook from `~/.claude/settings.json`, deletes `~/.claude/hooks/worktree-discipline.sh`, and strips the `## Worktree discipline` section from `~/.claude/CLAUDE.md`. It is idempotent — safe to run even if nothing is installed:
 
 ```bash
-cp ~/.claude/settings.json ~/.claude/settings.json.bak
-jq '
-  if (.hooks.PreToolUse | type) == "array" then
-      .hooks.PreToolUse |= (
-          map(.hooks |= map(select((.command // "") | test("worktree-discipline.sh") | not)))
-        | map(select((.hooks | length) > 0))
-      )
-    | (if (.hooks.PreToolUse | length) == 0 then .hooks |= del(.PreToolUse) else . end)
-  else . end
-' ~/.claude/settings.json.bak > ~/.claude/settings.json
+bash "${CLAUDE_PLUGIN_ROOT}/skills/teardown-worktree-discipline/scripts/teardown-worktree-discipline.sh"
 ```
 
-Confirm it parsed and the entry is gone before deleting the backup:
-
-```bash
-jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' ~/.claude/settings.json \
-  && echo "STILL PRESENT — restore from ~/.claude/settings.json.bak and remove by hand" \
-  || echo "removed from settings.json"
-rm -f ~/.claude/settings.json.bak   # only after you've confirmed
-```
-
-**3. Delete the copied hook script:**
-
-```bash
-rm -f ~/.claude/hooks/worktree-discipline.sh
-```
-
-**4. Remove the global rule from `~/.claude/CLAUDE.md`.** Open it and delete the entire `## Worktree discipline` section — the heading and its body, up to the next `## ` heading (or end of file). Use the editor for this; it's prose and safest done by reading the file and editing. (Scriptable alternative, if the heading text is exactly `## Worktree discipline`:)
-
-```bash
-cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.bak
-awk '
-  /^## / { skip = ($0 ~ /^## Worktree discipline[[:space:]]*$/) }
-  !skip
-' ~/.claude/CLAUDE.md.bak > ~/.claude/CLAUDE.md
-# review the diff, then: rm -f ~/.claude/CLAUDE.md.bak
-```
-
-**5. Reload.** Open `/hooks` once (or start a fresh session) so the watcher drops the deregistered block. Until you do, the already-loaded hook may still fire this session.
+**3. Reload.** Open `/hooks` once (or start a fresh session) so the watcher drops the deregistered block. Until you do, the already-loaded hook may still fire this session.
 
 ## Per-repo markers
 
@@ -72,16 +37,16 @@ Existing **worktrees** are untouched — dispose of them with `exit-and-dispose-
 
 ## Validate
 
+The teardown script prints what it did (or that nothing needed doing). For a manual audit:
+
 ```bash
 # hook no longer registered:
 jq '[.. | .command? // empty] | map(select(test("worktree-discipline.sh")))' ~/.claude/settings.json   # -> []
 # script gone:
 ls ~/.claude/hooks/worktree-discipline.sh 2>/dev/null && echo "STILL THERE" || echo "script removed"
-# the global rule section was actually stripped (Step 4):
+# the global rule section was actually stripped:
 grep -q '^## Worktree discipline' ~/.claude/CLAUDE.md \
   && echo "RULE STILL PRESENT — edit ~/.claude/CLAUDE.md by hand" || echo "rule removed: OK"
-# from the MAIN checkout of a previously-opted-in repo, a write is no longer denied —
-# editing a file there should now just work.
 ```
 
 Then `/plugin uninstall tss-git-skills` (or `/plugin marketplace remove neilwashere`) to drop the plugin itself.

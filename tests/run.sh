@@ -390,6 +390,127 @@ test_doctor_detects_stale_hook() {
   rm -rf "$sb"
 }
 
+# ---- teardown script ----
+TD="$ROOT/tss-git-skills/skills/teardown-worktree-discipline/scripts/teardown-worktree-discipline.sh"
+
+# Sandbox with everything wired: settings.json, hook file, CLAUDE.md rule.
+_wired_teardown_sandbox() {
+  local sb; sb="$(mktemp -d)"
+  mkdir -p "$sb/home/.claude/hooks"
+  cp "$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
+  printf '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit|NotebookEdit|Bash","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}}' > "$sb/home/.claude/settings.json"
+  printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
+  printf '%s' "$sb"
+}
+
+test_teardown_removes_everything() {
+  local sb; sb="$(_wired_teardown_sandbox)"
+  HOME="$sb/home" bash "$TD" >/dev/null 2>&1
+  # Hook no longer registered.
+  jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$sb/home/.claude/settings.json" >/dev/null 2>&1 \
+    && { printf 'FAIL: teardown: hook still registered\n'; FAILED=1; } \
+    || printf 'PASS: %s\n' "teardown deregisters hook"
+  # Script gone.
+  [ ! -f "$sb/home/.claude/hooks/worktree-discipline.sh" ] \
+    && printf 'PASS: %s\n' "teardown deletes hook script" \
+    || { printf 'FAIL: teardown: hook script still present\n'; FAILED=1; }
+  # CLAUDE.md rule gone.
+  grep -q '^## Worktree discipline' "$sb/home/.claude/CLAUDE.md" \
+    && { printf 'FAIL: teardown: CLAUDE.md rule still present\n'; FAILED=1; } \
+    || printf 'PASS: %s\n' "teardown strips CLAUDE.md rule"
+  rm -rf "$sb"
+}
+
+test_teardown_is_idempotent() {
+  local sb; sb="$(_wired_teardown_sandbox)"
+  HOME="$sb/home" bash "$TD" >/dev/null 2>&1  # first run
+  local out; out="$(HOME="$sb/home" bash "$TD" 2>&1)"  # second run
+  echo "$out" | grep -q 'already clean' \
+    && printf 'PASS: %s\n' "teardown idempotent: reports already clean" \
+    || { printf 'FAIL: teardown not idempotent\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_teardown_handles_nothing_installed() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude"
+  local out; out="$(HOME="$sb/home" bash "$TD" 2>&1)"
+  echo "$out" | grep -q 'nothing to remove' \
+    && printf 'PASS: %s\n' "teardown handles nothing installed" \
+    || { printf 'FAIL: teardown failed on clean home\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_teardown_handles_missing_settings_json() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude"
+  printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
+  # settings.json doesn't exist — should still clean up CLAUDE.md.
+  HOME="$sb/home" bash "$TD" >/dev/null 2>&1
+  grep -q '^## Worktree discipline' "$sb/home/.claude/CLAUDE.md" \
+    && { printf 'FAIL: teardown: CLAUDE.md rule still present (no settings.json)\n'; FAILED=1; } \
+    || printf 'PASS: %s\n' "teardown strips CLAUDE.md even without settings.json"
+  rm -rf "$sb"
+}
+
+test_teardown_preserves_other_hooks() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude"
+  # settings.json with an OTHER hook + the worktree-discipline hook
+  cat > "$sb/home/.claude/settings.json" <<'SETEOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash $HOME/.claude/hooks/other-hook.sh" }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "bash $HOME/.claude/hooks/worktree-discipline.sh" }
+        ]
+      }
+    ]
+  }
+}
+SETEOF
+  HOME="$sb/home" bash "$TD" >/dev/null 2>&1
+  # Other hook still registered.
+  jq -e '[.. | .command? // empty] | any(test("other-hook.sh"))' "$sb/home/.claude/settings.json" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "teardown preserves other hooks" \
+    || { printf 'FAIL: teardown removed other hooks\n'; FAILED=1; }
+  # Worktree hook gone.
+  jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$sb/home/.claude/settings.json" >/dev/null 2>&1 \
+    && { printf 'FAIL: teardown: worktree hook still registered with other hooks present\n'; FAILED=1; } \
+    || printf 'PASS: %s\n' "teardown removes only worktree hook"
+  rm -rf "$sb"
+}
+
+test_teardown_handles_malformed_settings() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude/hooks"
+  # Malformed JSON WITH the registration string AND a hook file present.
+  # The script must abort BEFORE deleting the hook, leaving it intact.
+  printf '{"hooks":{"PreToolUse":[{"matcher":"x","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}
+' > "$sb/home/.claude/settings.json"
+  touch "$sb/home/.claude/hooks/worktree-discipline.sh"
+  printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
+  local out rc=0
+  out="$(HOME="$sb/home" bash "$TD" 2>&1)" || rc=$?
+  # The script should exit non-zero (malformed JSON guard).
+  [ "$rc" != "0" ] \
+    && printf 'PASS: %s\n' "teardown exits non-zero on malformed settings" \
+    || { printf 'FAIL: teardown should exit non-zero on malformed JSON (got rc=%s)\n' "$rc"; FAILED=1; }
+  # The hook file should NOT have been deleted.
+  [ -f "$sb/home/.claude/hooks/worktree-discipline.sh" ] \
+    && printf 'PASS: %s\n' "teardown preserves hook file on malformed settings" \
+    || { printf 'FAIL: teardown deleted hook despite malformed settings\n'; FAILED=1; }
+  # The CLAUDE.md rule should NOT have been stripped.
+  grep -q '^## Worktree discipline' "$sb/home/.claude/CLAUDE.md" \
+    && printf 'PASS: %s\n' "teardown preserves CLAUDE.md rule on malformed settings" \
+    || { printf 'FAIL: teardown stripped CLAUDE.md despite malformed settings\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # ---- hook Bash command detection ----
 HOOK="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
 mkdir -p "$ROOT/tests/.sandboxes"
