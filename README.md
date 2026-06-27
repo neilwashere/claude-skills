@@ -27,3 +27,12 @@ See **[tss-git-skills/README.md](./tss-git-skills/README.md)** for the full
 reference — user-invoked skills (setup, teardown, enforcement, config) and
 model-invoked skills (create-and-enter, exit-and-dispose), plus configuration
 details.
+
+## Contributing
+
+Before opening a PR, read
+**[docs/contributing/closing-the-verification-loop.md](./docs/contributing/closing-the-verification-loop.md)**
+— a short field guide on the verification habits this repo expects: tests that
+can actually fail, behaviour that's observed rather than described, treating tool
+versions / platform / CI semantics as inputs, and designing the failure path of
+every destructive operation. It ends with a pre-flight checklist.
