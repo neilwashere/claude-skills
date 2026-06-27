@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
+# shellcheck disable=SC2317,SC2329,SC2016,SC2015
+#   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
+#     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
+#   SC2016: literal $HOME in printf strings (writing JSON settings files)
+#   SC2015: A && printf PASS || { printf FAIL } pattern is intentional —
+#     the printf always succeeds so the || branch is correct
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
@@ -502,6 +508,378 @@ test_teardown_handles_malformed_settings() {
   grep -q '^## Worktree discipline' "$sb/home/.claude/CLAUDE.md" \
     && printf 'PASS: %s\n' "teardown preserves CLAUDE.md rule on malformed settings" \
     || { printf 'FAIL: teardown stripped CLAUDE.md despite malformed settings\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+# ---- hook Bash command detection ----
+HOOK="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+mkdir -p "$ROOT/tests/.sandboxes"
+
+# Pipe a Bash tool event through the hook from inside a sandbox repo.
+# $1 = sandbox dir (contains repo/ with .claude/worktree-discipline.json {"enforce":true})
+# $2 = the Bash command string
+# Echoes the hook's stdout (empty = allow, JSON with deny = deny).
+_hook_bash() {
+  local sb="$1" cmd="$2" ev
+  # Use jq for proper JSON escaping (printf %s on raw commands can produce
+  # invalid JSON when the command contains double quotes, e.g. echo "x -> y").
+  ev="$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}' 2>/dev/null || echo '{}')"
+  ( cd "$sb/repo" && printf '%s' "$ev" | bash "$HOOK" 2>/dev/null ) || true
+}
+
+# True if the hook denied.
+_is_deny() { case "$1" in *'"permissionDecision"'*deny*) return 0 ;; *) return 1 ;; esac }
+
+# Make a sandbox with an enforced repo (marker enforce:true, no allowPaths).
+# Uses a sandbox dir that is NOT under /tmp/, /dev/, or /var/tmp/ because the
+# hook exempts those prefixes (redirects into them are always allowed).
+_hook_sandbox() {
+  local sb
+  sb="$(mkdir -p "$ROOT/tests/.sandboxes" && mktemp -d "$ROOT/tests/.sandboxes/XXXXXX" 2>/dev/null)"
+  # Verify sandbox is not under an exempt prefix (mktemp -p is GNU-only;
+  # the fallback above uses a template which is portable to BSD/macOS).
+  case "$sb" in /tmp/*|/var/tmp/*|/dev/*) echo "FATAL: sandbox under exempt prefix: $sb" >&2; exit 1 ;; esac
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$sb/repo/.claude/worktree-discipline.json"
+  printf '%s' "$sb"
+}
+
+test_hook_bash_denies_gt_redirect_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies > redirect into repo" \
+    || { printf 'FAIL: hook did not deny > redirect\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_append_redirect_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo >> $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies >> append into repo" \
+    || { printf 'FAIL: hook did not deny >> append\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_tee_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies tee into repo" \
+    || { printf 'FAIL: hook did not deny tee\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_tee_a_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee -a $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies tee -a into repo" \
+    || { printf 'FAIL: hook did not deny tee -a\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_sed_i_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  touch "$sb/repo/bar"
+  local out; out="$(_hook_bash "$sb" "sed -i 's/x/y/' $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies sed -i into repo" \
+    || { printf 'FAIL: hook did not deny sed -i\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_redirect_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied redirect to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows > /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_redirect_to_dev_null() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > /dev/null")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied redirect to /dev/null\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows > /dev/null"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_tee_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied tee to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows tee /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_sed_i_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "sed -i 's/x/y/' /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied sed -i to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows sed -i /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_arrow_operator() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "x -> y"')"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied arrow operator\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows arrow operator (->)"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_fat_arrow_operator() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "x => y"')"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied fat arrow\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows fat arrow operator (=>)"
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_quoted_gt_false_positive() {
+  # The hook parses a quoted > as a redirect — it denies echo "a > b" even
+  # though this is a string literal. This documents the limitation.
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "a > b"')"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies quoted > (known false positive)" \
+    || { printf 'FAIL: hook unexpectedly allowed quoted >\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_branch_creation() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "git checkout -b newbranch")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies git checkout -b" \
+    || { printf 'FAIL: hook did not deny branch creation\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_switch_c() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "git switch -c newbranch")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies git switch -c" \
+    || { printf 'FAIL: hook did not deny switch -c\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_grep_to_dev_null() {
+  local sb; sb="$(_hook_sandbox)"
+  # Redirect to /dev/null should be allowed even with > present.
+  local out; out="$(_hook_bash "$sb" "grep foo file > /dev/null 2>&1")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied grep > /dev/null\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows grep > /dev/null"
+  rm -rf "$sb"
+}
+
+# ---- worktree-enforce in / out ----
+# (WTE is already defined above, next to the doctor tests)
+
+# Create a repo with a COMMITTED marker (marker is in HEAD).
+_enforce_committed_repo() {
+  local sb="$1"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true,"allowPaths":["CHANGELOG.md"]}' > "$sb/repo/.claude/worktree-discipline.json"
+  ( cd "$sb/repo" && git add .claude/worktree-discipline.json && git commit -q -m "add marker" ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+
+# Create a repo with a STAGED-ONLY marker (on disk, not in HEAD).
+_enforce_staged_repo() {
+  local sb="$1"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$sb/repo/.claude/worktree-discipline.json"
+  ( cd "$sb/repo" && git add .claude/worktree-discipline.json ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+
+test_enforce_in_fresh_writes_and_stages() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_staged_repo "$sb")"
+  # Remove the staged marker first, so we test 'in' on a truly fresh slate.
+  rm -f "$repo/.claude/worktree-discipline.json"
+  ( cd "$repo" && git reset -q -- .claude/worktree-discipline.json ) >/dev/null 2>&1 || true
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "in fresh: enforce=true"
+  assert_eq "$(jq -r '.allowPaths | length' "$repo/.claude/worktree-discipline.json")" "0" "in fresh: allowPaths empty"
+  ( cd "$repo" && git diff --cached --name-only ) | grep -qx '.claude/worktree-discipline.json' \
+    && printf 'PASS: %s\n' "in fresh: marker staged" || { printf 'FAIL: in fresh: marker not staged\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_in_preserves_allowPaths() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # The committed repo already has enforce:true with allowPaths=["CHANGELOG.md"].
+  # Running 'in' again should preserve allowPaths.
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "in preserves: enforce=true"
+  assert_eq "$(jq -rc '.allowPaths' "$repo/.claude/worktree-discipline.json")" '["CHANGELOG.md"]' "in preserves: allowPaths kept"
+  rm -rf "$sb"
+}
+
+test_enforce_in_clears_local_disable_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # Add a local override that disables enforcement.
+  printf '{"enforce":false}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  [ ! -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "in clears local disable override" \
+    || { printf 'FAIL: in did not clear local disable override\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_committed_writes_local_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" out ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.local.json")" "false" "out committed: local override enforce=false"
+  # Committed marker unchanged.
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "out committed: committed marker untouched"
+  grep -qx '.claude/worktree-discipline.local.json' "$repo/.gitignore" \
+    && printf 'PASS: %s\n' "out committed: local override gitignored" \
+    || { printf 'FAIL: out committed: local override not gitignored\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_staged_only_removes_markers() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_staged_repo "$sb")"
+  # Also add a local override for good measure.
+  printf '{"enforce":false}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" out ) >/dev/null 2>&1
+  [ ! -f "$repo/.claude/worktree-discipline.json" ] \
+    && printf 'PASS: %s\n' "out staged-only: staged marker removed" \
+    || { printf 'FAIL: out staged-only: staged marker still present\n'; FAILED=1; }
+  [ ! -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "out staged-only: local override removed" \
+    || { printf 'FAIL: out staged-only: local override still present\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_no_markers_is_noop() {
+  local sb; sb="$(mktemp -d)"; local repo
+  mkdir -p "$sb/repo"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  repo="$sb/repo"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$WTE" out 2>&1 )"
+  echo "$out" | grep -q 'already off' \
+    && printf 'PASS: %s\n' "out no markers: reports already off" \
+    || { printf 'FAIL: out no markers: did not report already off\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_in_does_not_clear_local_enable_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # A local override that ALSO says enforce:true — it should survive 'in'.
+  printf '{"enforce":true,"allowPaths":["docs/**"]}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  [ -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "in keeps local enable override" \
+    || { printf 'FAIL: in wrongly removed local enable override\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+# ---- configure-worktree status ----
+CFG_STATUS="$ROOT/tss-git-skills/skills/configure-worktree/scripts/configure-worktree.sh"
+
+_cfgstatus_repo() {
+  local sb="$1"
+  mkdir -p "$sb/repo/.claude" "$sb/home/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+
+test_cfgstatus_all_default() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'source:.*default' \
+    && printf 'PASS: %s\n' "cfg-status shows defaults" \
+    || { printf 'FAIL: cfg-status did not show defaults\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_global_only() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  printf '{"branchNaming":{"embedIssueId":false}}' > "$sb/home/.claude/worktree-config.json"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'branchNaming.embedIssueId: false' \
+    && printf 'PASS: %s\n' "cfg-status picks up global branchNaming" \
+    || { printf 'FAIL: cfg-status missed global config\n%s\n' "$out"; FAILED=1; }
+  echo "$out" | grep -A1 'branchNaming' | grep -q 'source:.*global' \
+    && printf 'PASS: %s\n' "cfg-status reports global source" \
+    || { printf 'FAIL: cfg-status did not report global source\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_committed_beats_global() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  printf '{"branchNaming":{"embedIssueId":false}}' > "$sb/home/.claude/worktree-config.json"
+  printf '{"branchNaming":{"embedIssueId":true}}' > "$repo/.claude/worktree-config.json"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'branchNaming.embedIssueId: true' \
+    && printf 'PASS: %s\n' "cfg-status committed beats global" \
+    || { printf 'FAIL: cfg-status committed did not beat global\n%s\n' "$out"; FAILED=1; }
+  echo "$out" | grep -A1 'branchNaming' | grep -q 'source:.*committed' \
+    && printf 'PASS: %s\n' "cfg-status reports committed source" \
+    || { printf 'FAIL: cfg-status did not report committed source\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_field_composition() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  # global: worktreeDir, committed: worktreeLink, local: postCreate
+  printf '{"worktreeDir":"~/g/{branch}"}' > "$sb/home/.claude/worktree-config.json"
+  printf '{"worktreeLink":[".env"]}' > "$repo/.claude/worktree-config.json"
+  printf '{"postCreate":"npm ci"}' > "$repo/.claude/worktree-config.local.json"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'worktreeLink:.*\.env' \
+    && printf 'PASS: %s\n' "cfg-status worktreeLink from committed" \
+    || { printf 'FAIL: worktreeLink wrong\n%s\n' "$out"; FAILED=1; }
+  echo "$out" | grep -q 'npm ci' \
+    && printf 'PASS: %s\n' "cfg-status postCreate from local" \
+    || { printf 'FAIL: postCreate wrong\n%s\n' "$out"; FAILED=1; }
+  echo "$out" | grep -A2 'worktreeDir' | grep -q 'template:.*~/g/{branch}' \
+    && printf 'PASS: %s\n' "cfg-status worktreeDir template from global" \
+    || { printf 'FAIL: worktreeDir template wrong\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_warns_on_malformed_tier() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  printf 'this is not json' > "$repo/.claude/worktree-config.json"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'warning.*not valid JSON' \
+    && printf 'PASS: %s\n' "cfg-status warns on malformed tier" \
+    || { printf 'FAIL: cfg-status did not warn on malformed tier\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_branchNaming_non_object() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  # branchNaming as a string, not an object — should not crash.
+  printf '{"branchNaming":"yes"}' > "$repo/.claude/worktree-config.json"
+  local out rc
+  out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"; rc=$?
+  assert_eq "$rc" "0" "cfg-status exits 0 on malformed branchNaming"
+  echo "$out" | grep -q '<error>' \
+    && printf 'PASS: %s\n' "cfg-status shows <error> for bad branchNaming" \
+    || { printf 'FAIL: cfg-status did not handle bad branchNaming\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
 }
 

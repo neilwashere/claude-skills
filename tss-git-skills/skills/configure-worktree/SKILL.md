@@ -49,7 +49,17 @@ one.
 
 Omit any of **Location / Stack / Mirror** the user left at its default. **Always include the Branch-naming choice** explicitly — it must be written to override a prior or lower-tier `false` (this is the only field that is never omitted). So the assembled object always has at least `branchNaming`; if the user wants no change at all, cancel rather than write.
 
+## Viewing current config
+
+To see the resolved config (all tiers composed), run `status`:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" status
+```
+
+It prints each field's effective value and which tier it came from (local / committed / global / default).
+
 ## Notes
 
-- Run it from inside the target repo (committed/local write to the main checkout root). Global works anywhere.
+- Run it from inside the target repo (committed/local/status resolve to the main checkout root). Global works anywhere.
 - This skill writes config only. For enforcement on/off, use `worktree-enforce in|out`.

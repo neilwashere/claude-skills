@@ -53,6 +53,8 @@ wtc_worktree_dir() {
   local out="$tmpl"
   out="${out//\{parent\}/$parent}"; out="${out//\{repo\}/$repo}"; out="${out//\{branch\}/$slug}"
 
+  # Tilde in case patterns does NOT expand; the branches handle it explicitly.
+  # shellcheck disable=SC2088
   case "$out" in
     "~")    out="$HOME" ;;
     "~/"*)  out="$HOME/${out#\~/}" ;;
