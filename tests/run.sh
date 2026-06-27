@@ -481,18 +481,27 @@ SETEOF
 }
 
 test_teardown_handles_malformed_settings() {
-  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude"
-  # Invalid JSON — teardown should surface the error, not silently report clean.
-  printf 'this is not json' > "$sb/home/.claude/settings.json"
-  local out; out="$(HOME="$sb/home" bash "$TD" 2>&1)" || true
-  # jq will fail to parse; the script should not claim "already clean" because
-  # the initial jq -e check will short-circuit (jq fails). The guard now detects
-  # this and the script exits 0 with the "not registered" message.
-  # The key assertion: it should NOT crash, and should NOT leave a dangling
-  # registration pointing at a deleted hook file.
-  [ ! -f "$sb/home/.claude/hooks/worktree-discipline.sh" ] \
-    && printf 'PASS: %s\n' "teardown does not orphan hook registration on malformed settings" \
-    || { printf 'FAIL: teardown orphaned hook\n'; FAILED=1; }
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude/hooks"
+  # Malformed JSON WITH the registration string AND a hook file present.
+  # The script must abort BEFORE deleting the hook, leaving it intact.
+  printf '{"hooks":{"PreToolUse":[{"matcher":"x","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}
+' > "$sb/home/.claude/settings.json"
+  touch "$sb/home/.claude/hooks/worktree-discipline.sh"
+  printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
+  local out rc
+  out="$(HOME="$sb/home" bash "$TD" 2>&1)" || rc=$?
+  # The script should exit non-zero (malformed JSON guard).
+  [ "$rc" != "0" ] \
+    && printf 'PASS: %s\n' "teardown exits non-zero on malformed settings" \
+    || { printf 'FAIL: teardown should exit non-zero on malformed JSON (got rc=%s)\n' "$rc"; FAILED=1; }
+  # The hook file should NOT have been deleted.
+  [ -f "$sb/home/.claude/hooks/worktree-discipline.sh" ] \
+    && printf 'PASS: %s\n' "teardown preserves hook file on malformed settings" \
+    || { printf 'FAIL: teardown deleted hook despite malformed settings\n'; FAILED=1; }
+  # The CLAUDE.md rule should NOT have been stripped.
+  grep -q '^## Worktree discipline' "$sb/home/.claude/CLAUDE.md" \
+    && printf 'PASS: %s\n' "teardown preserves CLAUDE.md rule on malformed settings" \
+    || { printf 'FAIL: teardown stripped CLAUDE.md despite malformed settings\n'; FAILED=1; }
   rm -rf "$sb"
 }
 
