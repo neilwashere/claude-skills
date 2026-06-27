@@ -384,6 +384,154 @@ test_doctor_detects_stale_hook() {
   rm -rf "$sb"
 }
 
+# ---- hook Bash command detection ----
+HOOK="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+mkdir -p "$ROOT/tests/.sandboxes"
+
+# Pipe a Bash tool event through the hook from inside a sandbox repo.
+# $1 = sandbox dir (contains repo/ with .claude/worktree-discipline.json {"enforce":true})
+# $2 = the Bash command string
+# Echoes the hook's stdout (empty = allow, JSON with deny = deny).
+_hook_bash() {
+  local sb="$1" cmd="$2" ev
+  ev="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$cmd")"
+  ( cd "$sb/repo" && printf '%s' "$ev" | bash "$HOOK" 2>/dev/null ) || true
+}
+
+# True if the hook denied.
+_is_deny() { case "$1" in *'"permissionDecision"'*deny*) return 0 ;; *) return 1 ;; esac }
+
+# Make a sandbox with an enforced repo (marker enforce:true, no allowPaths).
+# Uses a sandbox dir that is NOT under /tmp/, /dev/, or /var/tmp/ because the
+# hook exempts those prefixes (redirects into them are always allowed).
+_hook_sandbox() {
+  local sb; sb="$(mktemp -d -p "$ROOT/tests/.sandboxes" 2>/dev/null || mktemp -d)"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$sb/repo/.claude/worktree-discipline.json"
+  printf '%s' "$sb"
+}
+
+test_hook_bash_denies_gt_redirect_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies > redirect into repo" \
+    || { printf 'FAIL: hook did not deny > redirect\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_append_redirect_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo >> $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies >> append into repo" \
+    || { printf 'FAIL: hook did not deny >> append\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_tee_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies tee into repo" \
+    || { printf 'FAIL: hook did not deny tee\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_tee_a_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee -a $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies tee -a into repo" \
+    || { printf 'FAIL: hook did not deny tee -a\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_sed_i_into_repo() {
+  local sb; sb="$(_hook_sandbox)"
+  touch "$sb/repo/bar"
+  local out; out="$(_hook_bash "$sb" "sed -i 's/x/y/' $sb/repo/bar")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies sed -i into repo" \
+    || { printf 'FAIL: hook did not deny sed -i\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_redirect_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied redirect to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows > /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_redirect_to_dev_null() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo > /dev/null")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied redirect to /dev/null\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows > /dev/null"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_tee_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "echo foo | tee /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied tee to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows tee /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_sed_i_to_tmp() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "sed -i 's/x/y/' /tmp/bar")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied sed -i to /tmp\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows sed -i /tmp/"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_arrow_operator() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "x -> y"')"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied arrow operator\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows arrow operator (->)"
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_branch_creation() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "git checkout -b newbranch")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies git checkout -b" \
+    || { printf 'FAIL: hook did not deny branch creation\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_switch_c() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" "git switch -c newbranch")"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies git switch -c" \
+    || { printf 'FAIL: hook did not deny switch -c\n  hook: %s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_grep_to_dev_null() {
+  local sb; sb="$(_hook_sandbox)"
+  # Redirect to /dev/null should be allowed even with > present.
+  local out; out="$(_hook_bash "$sb" "grep foo file > /dev/null 2>&1")"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied grep > /dev/null\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows grep > /dev/null"
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
