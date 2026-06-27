@@ -384,6 +384,115 @@ test_doctor_detects_stale_hook() {
   rm -rf "$sb"
 }
 
+# ---- worktree-enforce in / out ----
+# (WTE is already defined above, next to the doctor tests)
+
+# Create a repo with a COMMITTED marker (marker is in HEAD).
+_enforce_committed_repo() {
+  local sb="$1"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true,"allowPaths":["CHANGELOG.md"]}' > "$sb/repo/.claude/worktree-discipline.json"
+  ( cd "$sb/repo" && git add .claude/worktree-discipline.json && git commit -q -m "add marker" ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+
+# Create a repo with a STAGED-ONLY marker (on disk, not in HEAD).
+_enforce_staged_repo() {
+  local sb="$1"
+  mkdir -p "$sb/repo/.claude"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  printf '{"enforce":true}' > "$sb/repo/.claude/worktree-discipline.json"
+  ( cd "$sb/repo" && git add .claude/worktree-discipline.json ) >/dev/null 2>&1
+  printf '%s' "$sb/repo"
+}
+
+test_enforce_in_fresh_writes_and_stages() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_staged_repo "$sb")"
+  # Remove the staged marker first, so we test 'in' on a truly fresh slate.
+  rm -f "$repo/.claude/worktree-discipline.json"
+  ( cd "$repo" && git reset -q -- .claude/worktree-discipline.json ) >/dev/null 2>&1 || true
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "in fresh: enforce=true"
+  assert_eq "$(jq -r '.allowPaths | length' "$repo/.claude/worktree-discipline.json")" "0" "in fresh: allowPaths empty"
+  ( cd "$repo" && git diff --cached --name-only ) | grep -qx '.claude/worktree-discipline.json' \
+    && printf 'PASS: %s\n' "in fresh: marker staged" || { printf 'FAIL: in fresh: marker not staged\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_in_preserves_allowPaths() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # The committed repo already has enforce:true with allowPaths=["CHANGELOG.md"].
+  # Running 'in' again should preserve allowPaths.
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "in preserves: enforce=true"
+  assert_eq "$(jq -rc '.allowPaths' "$repo/.claude/worktree-discipline.json")" '["CHANGELOG.md"]' "in preserves: allowPaths kept"
+  rm -rf "$sb"
+}
+
+test_enforce_in_clears_local_disable_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # Add a local override that disables enforcement.
+  printf '{"enforce":false}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  [ ! -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "in clears local disable override" \
+    || { printf 'FAIL: in did not clear local disable override\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_committed_writes_local_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" out ) >/dev/null 2>&1
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.local.json")" "false" "out committed: local override enforce=false"
+  # Committed marker unchanged.
+  assert_eq "$(jq -r '.enforce' "$repo/.claude/worktree-discipline.json")" "true" "out committed: committed marker untouched"
+  grep -qx '.claude/worktree-discipline.local.json' "$repo/.gitignore" \
+    && printf 'PASS: %s\n' "out committed: local override gitignored" \
+    || { printf 'FAIL: out committed: local override not gitignored\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_staged_only_removes_markers() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_staged_repo "$sb")"
+  # Also add a local override for good measure.
+  printf '{"enforce":false}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" out ) >/dev/null 2>&1
+  [ ! -f "$repo/.claude/worktree-discipline.json" ] \
+    && printf 'PASS: %s\n' "out staged-only: staged marker removed" \
+    || { printf 'FAIL: out staged-only: staged marker still present\n'; FAILED=1; }
+  [ ! -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "out staged-only: local override removed" \
+    || { printf 'FAIL: out staged-only: local override still present\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_out_no_markers_is_noop() {
+  local sb; sb="$(mktemp -d)"; local repo
+  mkdir -p "$sb/repo"
+  ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
+      && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
+  repo="$sb/repo"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$WTE" out 2>&1 )"
+  echo "$out" | grep -q 'already off' \
+    && printf 'PASS: %s\n' "out no markers: reports already off" \
+    || { printf 'FAIL: out no markers: did not report already off\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_enforce_in_does_not_clear_local_enable_override() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_enforce_committed_repo "$sb")"
+  # A local override that ALSO says enforce:true — it should survive 'in'.
+  printf '{"enforce":true,"allowPaths":["docs/**"]}' > "$repo/.claude/worktree-discipline.local.json"
+  ( cd "$repo" && HOME="$sb/home" bash "$WTE" in ) >/dev/null 2>&1
+  [ -f "$repo/.claude/worktree-discipline.local.json" ] \
+    && printf 'PASS: %s\n' "in keeps local enable override" \
+    || { printf 'FAIL: in wrongly removed local enable override\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # ---- configure-worktree status ----
 CFG_STATUS="$ROOT/tss-git-skills/skills/configure-worktree/scripts/configure-worktree.sh"
 
