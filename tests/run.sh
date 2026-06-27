@@ -385,7 +385,7 @@ test_doctor_detects_stale_hook() {
 }
 
 # ---- worktree-enforce in / out ----
-WTE="$ROOT/tss-git-skills/skills/worktree-enforce/scripts/worktree-enforce.sh"
+# (WTE is already defined above, next to the doctor tests)
 
 # Create a repo with a COMMITTED marker (marker is in HEAD).
 _enforce_committed_repo() {
@@ -461,8 +461,8 @@ test_enforce_out_staged_only_removes_markers() {
   printf '{"enforce":false}' > "$repo/.claude/worktree-discipline.local.json"
   ( cd "$repo" && HOME="$sb/home" bash "$WTE" out ) >/dev/null 2>&1
   [ ! -f "$repo/.claude/worktree-discipline.json" ] \
-    && printf 'PASS: %s\n' "out staged-only: committed marker removed" \
-    || { printf 'FAIL: out staged-only: committed marker still present\n'; FAILED=1; }
+    && printf 'PASS: %s\n' "out staged-only: staged marker removed" \
+    || { printf 'FAIL: out staged-only: staged marker still present\n'; FAILED=1; }
   [ ! -f "$repo/.claude/worktree-discipline.local.json" ] \
     && printf 'PASS: %s\n' "out staged-only: local override removed" \
     || { printf 'FAIL: out staged-only: local override still present\n'; FAILED=1; }
