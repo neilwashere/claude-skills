@@ -394,7 +394,9 @@ mkdir -p "$ROOT/tests/.sandboxes"
 # Echoes the hook's stdout (empty = allow, JSON with deny = deny).
 _hook_bash() {
   local sb="$1" cmd="$2" ev
-  ev="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$cmd")"
+  # Use jq for proper JSON escaping (printf %s on raw commands can produce
+  # invalid JSON when the command contains double quotes, e.g. echo "x -> y").
+  ev="$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}' 2>/dev/null || echo '{}')"
   ( cd "$sb/repo" && printf '%s' "$ev" | bash "$HOOK" 2>/dev/null ) || true
 }
 
@@ -405,7 +407,11 @@ _is_deny() { case "$1" in *'"permissionDecision"'*deny*) return 0 ;; *) return 1
 # Uses a sandbox dir that is NOT under /tmp/, /dev/, or /var/tmp/ because the
 # hook exempts those prefixes (redirects into them are always allowed).
 _hook_sandbox() {
-  local sb; sb="$(mktemp -d -p "$ROOT/tests/.sandboxes" 2>/dev/null || mktemp -d)"
+  local sb
+  sb="$(mkdir -p "$ROOT/tests/.sandboxes" && mktemp -d "$ROOT/tests/.sandboxes/XXXXXX" 2>/dev/null)"
+  # Verify sandbox is not under an exempt prefix (mktemp -p is GNU-only;
+  # the fallback above uses a template which is portable to BSD/macOS).
+  case "$sb" in /tmp/*|/var/tmp/*|/dev/*) echo "FATAL: sandbox under exempt prefix: $sb" >&2; exit 1 ;; esac
   mkdir -p "$sb/repo/.claude"
   ( cd "$sb/repo" && git init -q && git config user.email a@b.c && git config user.name a \
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
@@ -501,6 +507,26 @@ test_hook_bash_allows_arrow_operator() {
   _is_deny "$out" \
     && { printf 'FAIL: hook wrongly denied arrow operator\n  hook: %s\n' "$out"; FAILED=1; } \
     || printf 'PASS: %s\n' "hook allows arrow operator (->)"
+  rm -rf "$sb"
+}
+
+test_hook_bash_allows_fat_arrow_operator() {
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "x => y"')"
+  _is_deny "$out" \
+    && { printf 'FAIL: hook wrongly denied fat arrow\n  hook: %s\n' "$out"; FAILED=1; } \
+    || printf 'PASS: %s\n' "hook allows fat arrow operator (=>)"
+  rm -rf "$sb"
+}
+
+test_hook_bash_denies_quoted_gt_false_positive() {
+  # The hook parses a quoted > as a redirect — it denies echo "a > b" even
+  # though this is a string literal. This documents the limitation.
+  local sb; sb="$(_hook_sandbox)"
+  local out; out="$(_hook_bash "$sb" 'echo "a > b"')"
+  _is_deny "$out" \
+    && printf 'PASS: %s\n' "hook denies quoted > (known false positive)" \
+    || { printf 'FAIL: hook unexpectedly allowed quoted >\n  hook: %s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
 }
 
