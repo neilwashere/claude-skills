@@ -5,10 +5,7 @@ Curated git/worktree workflow skills. Every skill here invokes as
 
 ## Install
 
-```bash
-/plugin marketplace add neilwashere/claude-skills
-/plugin install tss-git-skills@neilwashere
-```
+See the [marketplace README](../README.md#install) for install instructions.
 
 ## Reference
 
