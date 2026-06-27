@@ -450,6 +450,29 @@ test_cfgstatus_field_composition() {
   rm -rf "$sb"
 }
 
+test_cfgstatus_warns_on_malformed_tier() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  printf 'this is not json' > "$repo/.claude/worktree-config.json"
+  local out; out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"
+  echo "$out" | grep -q 'warning.*not valid JSON' \
+    && printf 'PASS: %s\n' "cfg-status warns on malformed tier" \
+    || { printf 'FAIL: cfg-status did not warn on malformed tier\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_cfgstatus_branchNaming_non_object() {
+  local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfgstatus_repo "$sb")"
+  # branchNaming as a string, not an object — should not crash.
+  printf '{"branchNaming":"yes"}' > "$repo/.claude/worktree-config.json"
+  local out rc
+  out="$( cd "$repo" && HOME="$sb/home" bash "$CFG_STATUS" status 2>&1 )"; rc=$?
+  assert_eq "$rc" "0" "cfg-status exits 0 on malformed branchNaming"
+  echo "$out" | grep -q '<error>' \
+    && printf 'PASS: %s\n' "cfg-status shows <error> for bad branchNaming" \
+    || { printf 'FAIL: cfg-status did not handle bad branchNaming\n%s\n' "$out"; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"

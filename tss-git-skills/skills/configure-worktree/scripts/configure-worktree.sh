@@ -27,13 +27,16 @@ if [ "$scope" = "status" ]; then
   for field in worktreeDir postCreate worktreeLink branchNaming; do
     src="default"; val=""
     for tier_f in "$main_root/.claude/worktree-config.local.json" "$main_root/.claude/worktree-config.json" "$HOME/.claude/worktree-config.json"; do
-      if [ -f "$tier_f" ] && jq empty "$tier_f" >/dev/null 2>&1 \
-         && jq -e --arg k "$field" 'has($k)' "$tier_f" >/dev/null 2>&1; then
-        src="$tier_f"
-        case "$src" in "$main_root/.claude/worktree-config.local.json") src="local" ;;
-          "$main_root/.claude/worktree-config.json") src="committed" ;;
-          "$HOME/.claude/worktree-config.json") src="global" ;; esac
-        break
+      if [ -f "$tier_f" ]; then
+        if ! jq empty "$tier_f" >/dev/null 2>&1; then
+          echo "configure-worktree: warning: $tier_f is not valid JSON, skipping" >&2
+        elif jq -e --arg k "$field" 'has($k)' "$tier_f" >/dev/null 2>&1; then
+          src="$tier_f"
+          case "$src" in "$main_root/.claude/worktree-config.local.json") src="local" ;;
+            "$main_root/.claude/worktree-config.json") src="committed" ;;
+            "$HOME/.claude/worktree-config.json") src="global" ;; esac
+          break
+        fi
       fi
     done
 
@@ -42,13 +45,16 @@ if [ "$scope" = "status" ]; then
         val="$(wtc_worktree_dir "$main_root" main || echo "<error>")"
         echo "worktreeDir:      $val"
         echo "  source:         $src"
-        echo "  template:       $(HOME="$HOME" _wtc_field_raw "$main_root" worktreeDir 2>/dev/null | jq -r '.' 2>/dev/null || echo "{parent}/{repo}.worktrees/{branch} (default)")"
+        echo "  template:       $(_wtc_field_raw "$main_root" worktreeDir 2>/dev/null | jq -r '.' 2>/dev/null || echo "{parent}/{repo}.worktrees/{branch} (default)")"
         ;;
       postCreate)
-        val="$(wtc_post_create "$main_root" | paste -sd'|' - 2>/dev/null || true)"
-        if [ -z "$val" ]; then val="(none)"; else val="$(echo "$val" | tr '|' '\n' | sed 's/^/  /')"; fi
         echo "postCreate:"
-        echo "$val"
+        val="$(wtc_post_create "$main_root" 2>/dev/null || true)"
+        if [ -z "$val" ]; then
+          echo "  (none)"
+        else
+          printf '%s\n' "$val" | sed 's/^/  /'
+        fi
         echo "  source:         $src"
         ;;
       worktreeLink)
@@ -57,7 +63,7 @@ if [ "$scope" = "status" ]; then
         echo "  source:         $src"
         ;;
       branchNaming)
-        val="$(wtc_branch_naming "$main_root")"
+        val="$(wtc_branch_naming "$main_root" 2>/dev/null || echo "<error>")"
         echo "branchNaming.embedIssueId: $val"
         echo "  source:         $src"
         ;;
