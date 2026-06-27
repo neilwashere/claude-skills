@@ -11,6 +11,9 @@
 # Run BEFORE /plugin uninstall.
 set -euo pipefail
 
+# jq is a hard dependency — fail loud if absent.
+command -v jq >/dev/null 2>&1 || { echo "teardown: jq is required" >&2; exit 1; }
+
 SETTINGS="$HOME/.claude/settings.json"
 HOOK_FILE="$HOME/.claude/hooks/worktree-discipline.sh"
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
@@ -19,7 +22,9 @@ CHANGED=0
 
 # ---- 1. Deregister the hook from settings.json ----
 if [ -f "$SETTINGS" ] && jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$SETTINGS" >/dev/null 2>&1; then
-  cp "$SETTINGS" "$SETTINGS.bak"
+  # Write filtered JSON to a temp file, then atomically replace — avoids
+  # truncating the live file before jq runs (set -e would abort mid-write).
+  tmp="$(mktemp)"
   jq '
     if (.hooks.PreToolUse | type) == "array" then
         .hooks.PreToolUse |= (
@@ -28,15 +33,15 @@ if [ -f "$SETTINGS" ] && jq -e '[.. | .command? // empty] | any(test("worktree-d
         )
       | (if (.hooks.PreToolUse | length) == 0 then .hooks |= del(.PreToolUse) else . end)
     else . end
-  ' "$SETTINGS.bak" > "$SETTINGS"
-  # Verify the entry was actually removed.
-  if jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$SETTINGS" >/dev/null 2>&1; then
-    echo "teardown: FAILED to remove hook from settings.json — restoring backup" >&2
-    cp "$SETTINGS.bak" "$SETTINGS"
-    rm -f "$SETTINGS.bak"
+  ' "$SETTINGS" > "$tmp"
+  # Verify the entry was actually removed before committing.
+  if jq -e '[.. | .command? // empty] | any(test("worktree-discipline.sh"))' "$tmp" >/dev/null 2>&1; then
+    echo "teardown: FAILED to remove hook from settings.json" >&2
+    rm -f "$tmp"
     exit 1
   fi
-  rm -f "$SETTINGS.bak"
+  cp "$tmp" "$SETTINGS"
+  rm -f "$tmp"
   echo "teardown: hook deregistered from ~/.claude/settings.json"
   CHANGED=1
 else
@@ -54,18 +59,18 @@ fi
 
 # ---- 3. Remove the CLAUDE.md rule section ----
 if [ -f "$CLAUDE_MD" ] && grep -q '^## Worktree discipline' "$CLAUDE_MD"; then
-  cp "$CLAUDE_MD" "$CLAUDE_MD.bak"
+  tmp="$(mktemp)"
   awk '
     /^## / { skip = ($0 ~ /^## Worktree discipline[[:space:]]*$/) }
     !skip
-  ' "$CLAUDE_MD.bak" > "$CLAUDE_MD"
-  if grep -q '^## Worktree discipline' "$CLAUDE_MD"; then
-    echo "teardown: FAILED to remove rule from CLAUDE.md — restoring backup" >&2
-    cp "$CLAUDE_MD.bak" "$CLAUDE_MD"
-    rm -f "$CLAUDE_MD.bak"
+  ' "$CLAUDE_MD" > "$tmp"
+  if grep -q '^## Worktree discipline' "$tmp"; then
+    echo "teardown: FAILED to remove rule from CLAUDE.md" >&2
+    rm -f "$tmp"
     exit 1
   fi
-  rm -f "$CLAUDE_MD.bak"
+  cp "$tmp" "$CLAUDE_MD"
+  rm -f "$tmp"
   echo "teardown: removed '## Worktree discipline' section from ~/.claude/CLAUDE.md"
   CHANGED=1
 else

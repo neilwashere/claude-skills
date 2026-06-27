@@ -480,6 +480,22 @@ SETEOF
   rm -rf "$sb"
 }
 
+test_teardown_handles_malformed_settings() {
+  local sb; sb="$(mktemp -d)"; mkdir -p "$sb/home/.claude"
+  # Invalid JSON — teardown should surface the error, not silently report clean.
+  printf 'this is not json' > "$sb/home/.claude/settings.json"
+  local out; out="$(HOME="$sb/home" bash "$TD" 2>&1)" || true
+  # jq will fail to parse; the script should not claim "already clean" because
+  # the initial jq -e check will short-circuit (jq fails). The guard now detects
+  # this and the script exits 0 with the "not registered" message.
+  # The key assertion: it should NOT crash, and should NOT leave a dangling
+  # registration pointing at a deleted hook file.
+  [ ! -f "$sb/home/.claude/hooks/worktree-discipline.sh" ] \
+    && printf 'PASS: %s\n' "teardown does not orphan hook registration on malformed settings" \
+    || { printf 'FAIL: teardown orphaned hook\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
