@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
-# shellcheck disable=SC2329,SC2016
-#   SC2329: test_* functions invoked dynamically via declare -F | grep
+# shellcheck disable=SC2317,SC2329,SC2016
+#   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
+#     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
 #   SC2016: literal $HOME in printf strings (writing JSON settings files)
 #   SC2015: suppressed per-line at the A && printf PASS || { printf FAIL } sites
 set -uo pipefail
