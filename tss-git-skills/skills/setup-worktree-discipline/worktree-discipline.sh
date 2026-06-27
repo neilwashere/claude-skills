@@ -176,6 +176,11 @@ if [ "$TOOL" = "Bash" ]; then
   # The char before '>' must not be 0-9 > & = - : excluding '=' and '-' stops the
   # operators '=>' and '->' (in echo strings, awk/perl/js one-liners) being misread
   # as a redirect into a file named after the following word (false-positive deny).
+  #
+  # sed -i edge case (not fixable with regex alone):
+  #   - sed -i 's/x/y/' file1 file2 → only file2 (the last token) is checked;
+  #     file1 is missed and unguarded (the Write/Edit block does not apply to
+  #     Bash-invoked sed -i). Single-file sed -i is caught.
   CANDS=$(
     printf '%s' "$COMMAND" | grep -oE '(^|[^0-9>&=-])>>?[[:space:]]*[^[:space:]><|&;()]+' | sed -E 's/.*>>?[[:space:]]*//'
     printf '%s' "$COMMAND" | grep -oE '\btee[[:space:]]+(-a[[:space:]]+)?[^[:space:]><|&;()]+' | sed -E 's/.*tee[[:space:]]+(-a[[:space:]]+)?//'
