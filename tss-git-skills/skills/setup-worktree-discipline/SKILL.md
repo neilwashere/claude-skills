@@ -14,6 +14,8 @@ It is **opt-in per repo** and off by default everywhere. See `worktree-disciplin
 
 **The Bash layer is best-effort.** Write/Edit/NotebookEdit into the main checkout are blocked robustly; for **Bash** the hook additionally scans for `>` / `>>` / `tee` / `sed -i` writes that resolve into the tree. That scan is heuristic and can false-positive on a command that merely *contains* a literal `>` — a regex, `grep -E`, a heredoc, an `awk`/`perl` one-liner (`=>` and `->` are already special-cased, but other `>` uses are not). If a benign Bash command is wrongly denied, rephrase it to avoid the literal `>`, or run it from a worktree. The Write/Edit block is the real guard; the Bash scan is a backstop, not a complete one.
 
+Known `sed -i` gaps: `sed -i.bak 's/x/y/' file` is missed (the backup extension is picked up as the target, not the file), and `sed -i 's/x/y/' f1 f2` only checks `f2`. These paths are still protected by the Write/Edit block.
+
 ## Install
 
 **1. Install the hook script.** Copy the bundled hook to the global hooks dir and make it executable:

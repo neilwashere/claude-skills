@@ -176,6 +176,12 @@ if [ "$TOOL" = "Bash" ]; then
   # The char before '>' must not be 0-9 > & = - : excluding '=' and '-' stops the
   # operators '=>' and '->' (in echo strings, awk/perl/js one-liners) being misread
   # as a redirect into a file named after the following word (false-positive deny).
+  #
+  # sed -i edge cases (documented, not fixable with regex alone):
+  #   - sed -i.bak 's/x/y/' file   → the "last token" heuristic extracts ".bak",
+  #     not "file", so the write is missed. The Write/Edit block covers this path.
+  #   - sed -i 's/x/y/' file1 file2 → only file2 (the last token) is checked;
+  #     file1 is missed. Multi-file sed -i writes are rare but possible.
   CANDS=$(
     printf '%s' "$COMMAND" | grep -oE '(^|[^0-9>&=-])>>?[[:space:]]*[^[:space:]><|&;()]+' | sed -E 's/.*>>?[[:space:]]*//'
     printf '%s' "$COMMAND" | grep -oE '\btee[[:space:]]+(-a[[:space:]]+)?[^[:space:]><|&;()]+' | sed -E 's/.*tee[[:space:]]+(-a[[:space:]]+)?//'
