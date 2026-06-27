@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
+# shellcheck disable=SC2317,SC2329,SC2016,SC2015
+#   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
+#     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
+#   SC2016: literal $HOME in printf strings (writing JSON settings files)
+#   SC2015: A && printf PASS || { printf FAIL } pattern is intentional —
+#     the printf always succeeds so the || branch is correct
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"

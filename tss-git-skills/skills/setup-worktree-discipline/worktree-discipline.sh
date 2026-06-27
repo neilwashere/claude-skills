@@ -57,7 +57,7 @@ case "$TOOL" in
     BASH_REMATCH=()
     while [[ "$REMAINING" =~ (^|[\&\;\|[:space:]])cd[[:space:]]+([^[:space:]\&\;\|()\<\>]+) ]]; do
       TGT="${BASH_REMATCH[2]}"
-      REMAINING="${REMAINING#*${BASH_REMATCH[0]}}"
+      REMAINING="${REMAINING#*"${BASH_REMATCH[0]}"}"
       case "$TGT" in
         /*) CAND="$TGT" ;;
         *)  CAND="$EFFECTIVE_CWD/$TGT" ;;
