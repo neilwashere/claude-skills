@@ -488,7 +488,7 @@ test_teardown_handles_malformed_settings() {
 ' > "$sb/home/.claude/settings.json"
   touch "$sb/home/.claude/hooks/worktree-discipline.sh"
   printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
-  local out rc
+  local out rc=0
   out="$(HOME="$sb/home" bash "$TD" 2>&1)" || rc=$?
   # The script should exit non-zero (malformed JSON guard).
   [ "$rc" != "0" ] \
