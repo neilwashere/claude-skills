@@ -25,8 +25,5 @@ For live, git-synced local development, point the marketplace at your checkout:
 
 See **[tss-git-skills/README.md](./tss-git-skills/README.md)** for the full
 reference — user-invoked skills (setup, teardown, enforcement, config) and
-model-invoked skills (create-and-enter, exit-and-dispose).
-
-Worktree creation is configurable via a three-tier `worktree-config.json` family
-(committed / local / global). See the
-[design doc](./docs/superpowers/specs/2026-06-25-worktree-customisation-design.md).
+model-invoked skills (create-and-enter, exit-and-dispose), plus configuration
+details.
