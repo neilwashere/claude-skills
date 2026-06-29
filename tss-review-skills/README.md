@@ -21,6 +21,13 @@ user-reachable).
 
 - **[review-changes](./skills/review-changes/SKILL.md)** — Dispatch a panel of reviewer models against a diff/PR + spec; findings land in a canonical JSON ledger; drive the address-loop to no-open-HIGH/MEDIUM.
 
+## Working directory
+
+Each review run writes its files under `.reviews/<run-id>/` in the repo root
+(gitignored). The canonical ledger lives at `.reviews/<run-id>/ledger.json`.
+`synthesize-review-learnings` reads `.reviews/*/ledger.json` to harvest
+converged findings; the run directories are not auto-deleted.
+
 > **v1 dedup simplification:** duplicate findings are identified by exact
 > `(dimension, file, line)` triple — no fuzzy matching. Two findings collide
 > only when all three fields match exactly.
