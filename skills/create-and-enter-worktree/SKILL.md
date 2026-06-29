@@ -12,13 +12,15 @@ metadata:
 A **compound** workflow: create a sibling git worktree **and** relocate the session into it. It is two operations because no single primitive does both:
 
 - `wt-new.sh` (bundled) creates `<repo-parent>/<repo>.worktrees/<branch>` off `origin/<default>` and links `.claude` context + gitignored creds — but a script **cannot** move the session.
-- The harness **`EnterWorktree` tool** is the only thing that relocates the session's cwd — but its own `name` mode only creates under `.claude/worktrees/`, not the sibling layout.
+- Claude Code's **`EnterWorktree` tool** is the only thing that relocates the session's cwd — but its own `name` mode only creates under `.claude/worktrees/`, not the sibling layout.
 
-So we create with the script, then enter by **path**. (`EnterWorktree({path})` accepts any worktree in `git worktree list` — verified **from the main checkout**; for the worktree→sibling caveat see *Switching between worktrees* below.)
+So we create with the script, then enter by **path**. (Claude Code: `EnterWorktree({path})` accepts any worktree in `git worktree list` — verified **from the main checkout**; for the worktree→sibling caveat see *Switching between worktrees* below.)
+
+> **Portability.** This skill is fully automatic in Claude Code, which has a session-relocation tool. Other harnesses have no such tool: there, run the bundled `scripts/wt-new.sh` to *create* the worktree, then open a session in / `cd` into the printed path yourself. See `docs/SUPPORT-MATRIX.md`.
 
 ## Why you cannot just `cd`
 
-`cd` does **not** persist in this harness — the working directory is reverted after every Bash call. `cd ../repo.worktrees/x && …` runs that one command in the worktree and then snaps back to the main checkout. The **only** way to keep the session in the worktree is the `EnterWorktree` tool. Do not attempt `cd`.
+`cd` does **not** persist in Claude Code (and several other harnesses) — the working directory is reverted after every Bash call. `cd ../repo.worktrees/x && …` runs that one command in the worktree and then snaps back to the main checkout. The **only** way to keep the session in the worktree is the `EnterWorktree` tool. Do not attempt `cd`.
 
 ## Create the worktree BEFORE the first file write
 
@@ -38,7 +40,9 @@ Name the branch `<type>/<slug>` — a conventional-commit type, then a short slu
 Before embedding an issue number, honor the repo's `branchNaming.embedIssueId` (default `true`):
 
 ```
+# Claude Code (plugin): the bundled resolver answers this directly —
 . "${CLAUDE_PLUGIN_ROOT}/lib/worktree-config.sh"; wtc_branch_naming "$(git rev-parse --show-toplevel)"
+# Elsewhere: source the bundled lib/worktree-config.sh by its installed path, then call wtc_branch_naming <repo-root>.
 ```
 
 `true` → embed the number; `false` → omit it (e.g. `feat/configure-worktree`). Set this with `configure-worktree`.
@@ -50,18 +54,19 @@ Before embedding an issue number, honor the repo's `branchNaming.embedIssueId` (
 **Step 1 — create (Bash, run from the main checkout).** Its stdout is *exactly* the worktree path; progress goes to stderr.
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/skills/create-and-enter-worktree/scripts/wt-new.sh" <branch> [base]
+# Run the bundled scripts/wt-new.sh from the main checkout.
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/create-and-enter-worktree/scripts/wt-new.sh" <branch> [base]
+# Otherwise: bash <this-skill-dir>/scripts/wt-new.sh <branch> [base]
 ```
 
 `wt-new.sh` creates (or resumes) `<repo>.worktrees/<branch>` off `origin/<base>` (default: origin's default branch — this is what stops worktrees being branched off the *active* branch) and links the Claude project context + gitignored creds.
 
-**Step 2 — enter (the `EnterWorktree` tool, not Bash).** Take the path printed in Step 1 and call:
+**Step 2 — relocate the session into the worktree.** Use the single path line Step 1 printed.
 
-```
-EnterWorktree({ path: "<the path wt-new.sh printed>" })
-```
+- **Claude Code:** call the session-relocation tool — `EnterWorktree({ path: "<the path wt-new.sh printed>" })`.
+- **Other harnesses:** there is usually no relocation tool. Start a session in that directory, or `cd` into it. Note some harnesses revert `cd` between commands — if so, open the path as a fresh working directory rather than relying on `cd`.
 
-Pass the **exact single line** `wt-new.sh` wrote to stdout — don't reconstruct the path from the branch name (the directory slug encodes `/` as `-`, so `feat/x` lives at `…/feat-x`), and don't pipe `wt-new.sh` through anything that could prepend to its output. Progress notes go to stderr precisely to keep that one stdout line clean.
+Pass the **exact single line** `wt-new.sh` wrote to stdout — don't reconstruct it from the branch name (the directory slug encodes `/` as `-`), and don't pipe `wt-new.sh` through anything that could prepend to its output.
 
 The session is now in the worktree. **Step 3 — assert you actually relocated.** This is the whole point of the skill, so *check* it, don't eyeball it — `git-dir` and `git-common-dir` differ **only** inside a worktree:
 
@@ -76,21 +81,23 @@ gc=$( (cd "$(git rev-parse --git-common-dir)" && pwd -P) )
 git status -sb
 ```
 
-If it prints `NOT IN WORKTREE`, **stop**: `EnterWorktree` was skipped or given the wrong path. Re-enter (`EnterWorktree({ path })`) before any file write — otherwise every edit pollutes the main checkout's active branch, the exact failure this skill exists to prevent.
+If it prints `NOT IN WORKTREE`, **stop**: Claude Code's `EnterWorktree` was skipped or given the wrong path. In Claude Code, re-enter (`EnterWorktree({ path })`) before any file write — otherwise every edit pollutes the main checkout's active branch, the exact failure this skill exists to prevent.
 
 ## Already created a worktree but stuck on main?
 
 If a worktree exists (you or a prior step ran `git worktree add` / `wt-new.sh`) but the session is still in the main checkout, you do **not** re-create it — just enter it:
 
 ```
+# Claude Code:
 EnterWorktree({ path: "<existing worktree path from `git worktree list`>" })
 ```
 
 ## Switching between worktrees
 
-`EnterWorktree({ path })` relocates **from the main checkout into a worktree**. It will **not** hop directly from one worktree into a sibling — you get `Cannot enter worktree: …/.claude/worktrees does not exist`. To switch features, return to the main checkout first, then enter the other tree:
+Claude Code's `EnterWorktree({ path })` relocates **from the main checkout into a worktree**. It will **not** hop directly from one worktree into a sibling — you get `Cannot enter worktree: …/.claude/worktrees does not exist`. To switch features in Claude Code, return to the main checkout first, then enter the other tree:
 
 ```
+# Claude Code:
 ExitWorktree({ action: "keep" })          # back to the main checkout
 EnterWorktree({ path: "<other worktree path>" })
 ```
@@ -103,4 +110,4 @@ A fresh worktree starts clean — it does not share `node_modules`, build caches
 
 ## Cleanup
 
-Remove the worktree only AFTER its PR merges — use the `exit-and-dispose-worktree` skill (it leaves the session via `ExitWorktree({keep})` then removes the tree with `wt-rm.sh`).
+Remove the worktree only AFTER its PR merges — use the `exit-and-dispose-worktree` skill (Claude Code: `ExitWorktree({keep})` to leave, then `wt-rm.sh` to remove the tree).
