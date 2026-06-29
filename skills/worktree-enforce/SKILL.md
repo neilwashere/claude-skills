@@ -2,6 +2,10 @@
 name: worktree-enforce
 description: Opt the current repo in or out of worktree-discipline enforcement, show its status, or run a doctor health check. `worktree-enforce in` requires all work here to go through worktrees; `worktree-enforce out` stops enforcing (local override if the marker is committed, else removes it); `worktree-enforce status` shows whether enforcement is active, from which marker, and whether the global hook is installed; `worktree-enforce doctor` audits the global wiring and runs a live-deny smoke test proving the hook actually fires. Manages the .claude/worktree-discipline.json marker the setup-worktree-discipline hook reads.
 disable-model-invocation: true
+license: MIT
+compatibility: "Requires git and a POSIX shell. Marker management (in/out/status/doctor) is portable; the enforcement it toggles is applied only by the Claude Code PreToolUse hook from setup-worktree-discipline."
+metadata:
+  version: "1.0.0"
 ---
 
 # worktree-enforce

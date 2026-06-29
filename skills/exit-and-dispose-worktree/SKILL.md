@@ -1,6 +1,10 @@
 ---
 name: exit-and-dispose-worktree
 description: Use when a feature's PR has merged and its worktree should be torn down. Leaves the worktree session via the ExitWorktree tool, then removes the tree from disk with wt-rm.sh. Keywords worktree removal, wt-rm, dispose, teardown, cleanup, after merge.
+license: MIT
+compatibility: "Requires git and a POSIX shell. Claude Code leaves the session via ExitWorktree; elsewhere leave the worktree session manually, then run the removal script from the main checkout."
+metadata:
+  version: "1.0.0"
 ---
 
 # exit-and-dispose-worktree

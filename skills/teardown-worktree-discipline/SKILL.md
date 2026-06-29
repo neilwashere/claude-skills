@@ -2,6 +2,10 @@
 name: teardown-worktree-discipline
 description: Remove the worktree-discipline enforcement installed by setup-worktree-discipline — deregister the PreToolUse hook from ~/.claude/settings.json, delete the copied hook script, and strip the global CLAUDE.md rule. The clean exit; run it before /plugin uninstall.
 disable-model-invocation: true
+license: MIT
+compatibility: "Claude Code only: reverses setup-worktree-discipline (PreToolUse hook + ~/.claude integration). No-op on other harnesses."
+metadata:
+  version: "1.0.0"
 ---
 
 # Teardown Worktree Discipline

@@ -2,6 +2,10 @@
 name: configure-worktree
 description: Guided setup for per-repo or global worktree creation config (where worktrees live, what to mirror into them, what to run after creating one, branch naming). Writes the worktree-config marker; does NOT change enforcement. Run it to tailor how create-and-enter-worktree builds worktrees.
 disable-model-invocation: true
+license: MIT
+compatibility: "Requires git and a POSIX shell (bash, jq). Writes the worktree-config marker; fully portable. On harnesses without an interactive question tool, ask the questions in chat."
+metadata:
+  version: "1.0.0"
 ---
 
 # configure-worktree

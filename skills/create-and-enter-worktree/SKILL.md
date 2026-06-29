@@ -1,6 +1,10 @@
 ---
 name: create-and-enter-worktree
 description: Use when starting an epic, plan, or feature that needs its own git worktree, BEFORE writing its spec, plan, or code. Creates a sibling worktree off the default branch and relocates the session into it via the EnterWorktree tool. Keywords worktree, wt-new, isolation, parallel stream, kickoff, start feature.
+license: MIT
+compatibility: "Requires git and a POSIX shell. Claude Code relocates the session automatically (EnterWorktree); on other harnesses the bundled script creates the worktree but you must cd in / start a session there yourself."
+metadata:
+  version: "1.0.0"
 ---
 
 # create-and-enter-worktree

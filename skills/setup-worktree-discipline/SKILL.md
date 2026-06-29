@@ -2,6 +2,10 @@
 name: setup-worktree-discipline
 description: Install the worktree-discipline enforcement — a PreToolUse hook that blocks direct writes (and branch/cherry-pick ops) in the main checkout of opted-in repos, plus the global CLAUDE.md rule. Run once to set it up.
 disable-model-invocation: true
+license: MIT
+compatibility: "Claude Code only: installs a PreToolUse hook plus ~/.claude integration that make an opted-in main checkout read-only. No equivalent primitive on other harnesses."
+metadata:
+  version: "1.0.0"
 ---
 
 # Setup Worktree Discipline
