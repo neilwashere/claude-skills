@@ -1,7 +1,0 @@
-{
-  "name": "tss-git-skills",
-  "description": "Curated git/worktree workflow skills — branch discipline, worktree create/enter/dispose. Namespaced as tss-git-skills:<skill>.",
-  "author": {
-    "name": "Neil Chambers"
-  }
-}

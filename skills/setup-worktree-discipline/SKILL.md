@@ -2,13 +2,19 @@
 name: setup-worktree-discipline
 description: Install the worktree-discipline enforcement — a PreToolUse hook that blocks direct writes (and branch/cherry-pick ops) in the main checkout of opted-in repos, plus the global CLAUDE.md rule. Run once to set it up.
 disable-model-invocation: true
+license: MIT
+compatibility: "Claude Code only: installs a PreToolUse hook plus ~/.claude integration that make an opted-in main checkout read-only. No equivalent primitive on other harnesses."
+metadata:
+  version: "1.0.0"
 ---
 
 # Setup Worktree Discipline
 
+> **Claude Code only.** This installs a `PreToolUse` hook and `~/.claude` integration — mechanisms no other harness has. There is no portable equivalent; see `docs/SUPPORT-MATRIX.md`.
+
 This is a **one-time installer**, run deliberately by the human — not a runtime behaviour. It lays down three things, then you opt repos in one at a time.
 
-What it enforces (in a repo that has opted in): all feature work happens in a git **worktree**; the **main checkout is read-only** (changes reach `main` only via a merged worktree PR); branches come off `origin/<default>`, never the active branch; and you **enter** worktrees with the `EnterWorktree` tool / `/create-and-enter-worktree`, never `cd` (the harness reverts cwd every Bash call).
+What it enforces (in a repo that has opted in): all feature work happens in a git **worktree**; the **main checkout is read-only** (changes reach `main` only via a merged worktree PR); branches come off `origin/<default>`, never the active branch; and you **enter** worktrees with the Claude Code `EnterWorktree` tool / `/create-and-enter-worktree`, never `cd` (the harness reverts cwd every Bash call).
 
 It is **opt-in per repo** and off by default everywhere. See `worktree-discipline.sh` (this skill dir) for the exact decision table.
 
@@ -19,6 +25,8 @@ Known `sed -i` gap: `sed -i 's/x/y/' f1 f2` only checks `f2` — `f1` is unguard
 ## Install
 
 **1. Install the hook script.** Copy the bundled hook to the global hooks dir and make it executable:
+
+In Claude Code the bundled hook lives at `${CLAUDE_PLUGIN_ROOT}/skills/setup-worktree-discipline/worktree-discipline.sh`; if you installed via `install.sh`, use that copy's path instead.
 
 ```bash
 mkdir -p ~/.claude/hooks
@@ -110,6 +118,8 @@ Empty output from an opted-in main checkout means the script isn't reachable (ch
 ## Update the installed hook
 
 Step 1 **copies** `worktree-discipline.sh` into `~/.claude/hooks/` rather than referencing it in place — that's deliberate (the rule then survives independently of the plugin). The cost: a plugin update does **not** refresh the copy. After upgrading the plugin, re-copy:
+
+In Claude Code the bundled hook lives at `${CLAUDE_PLUGIN_ROOT}/skills/setup-worktree-discipline/worktree-discipline.sh`; if you installed via `install.sh`, use that copy's path instead.
 
 ```bash
 cp "${CLAUDE_PLUGIN_ROOT}/skills/setup-worktree-discipline/worktree-discipline.sh" ~/.claude/hooks/worktree-discipline.sh

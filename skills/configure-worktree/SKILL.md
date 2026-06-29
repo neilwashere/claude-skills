@@ -2,6 +2,10 @@
 name: configure-worktree
 description: Guided setup for per-repo or global worktree creation config (where worktrees live, what to mirror into them, what to run after creating one, branch naming). Writes the worktree-config marker; does NOT change enforcement. Run it to tailor how create-and-enter-worktree builds worktrees.
 disable-model-invocation: true
+license: MIT
+compatibility: "Requires git and a POSIX shell (bash, jq). Writes the worktree-config marker; fully portable. On harnesses without an interactive question tool, ask the questions in chat."
+metadata:
+  version: "1.0.0"
 ---
 
 # configure-worktree
@@ -13,12 +17,15 @@ Interactive setup for the **worktree-config** marker family
 
 ## How it works
 
-Ask the questions below with the `AskUserQuestion` tool, assemble a JSON
-object from the answers (include **only** fields the user actively set — omit a
-field to keep its built-in default), then write it to the chosen tier:
+Ask the questions below (Claude Code: the `AskUserQuestion` tool; other harnesses:
+prompt in chat), assemble a JSON object from the answers (include **only** fields
+the user actively set — omit a field to keep its built-in default), then write it
+to the chosen tier by piping the JSON into the bundled `scripts/configure-worktree.sh`:
 
 ```bash
-printf '%s' '<assembled-json>' | bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" <global|committed|local>
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" <global|committed|local>
+# Otherwise:            bash <this-skill-dir>/scripts/configure-worktree.sh <global|committed|local>
+printf '%s' '<assembled-json>' | bash <configure-worktree.sh> <global|committed|local>
 ```
 
 The script merges your fields over any existing tier file (your values win per
@@ -54,7 +61,8 @@ Omit any of **Location / Stack / Mirror** the user left at its default. **Always
 To see the resolved config (all tiers composed), run `status`:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" status
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" status
+# Otherwise:            bash <this-skill-dir>/scripts/configure-worktree.sh status
 ```
 
 It prints each field's effective value and which tier it came from (local / committed / global / default).

@@ -2,9 +2,15 @@
 name: worktree-enforce
 description: Opt the current repo in or out of worktree-discipline enforcement, show its status, or run a doctor health check. `worktree-enforce in` requires all work here to go through worktrees; `worktree-enforce out` stops enforcing (local override if the marker is committed, else removes it); `worktree-enforce status` shows whether enforcement is active, from which marker, and whether the global hook is installed; `worktree-enforce doctor` audits the global wiring and runs a live-deny smoke test proving the hook actually fires. Manages the .claude/worktree-discipline.json marker the setup-worktree-discipline hook reads.
 disable-model-invocation: true
+license: MIT
+compatibility: "Requires git and a POSIX shell. Marker management (in/out/status) is portable; the enforcement it toggles, and the doctor health check, are Claude Code only (the PreToolUse hook from setup-worktree-discipline)."
+metadata:
+  version: "1.0.0"
 ---
 
 # worktree-enforce
+
+> **Mostly Claude Code.** Marker management (in/out/status) works anywhere; the enforcement it toggles is applied only by the Claude Code hook from setup-worktree-discipline.
 
 Per-repo control over worktree-discipline enforcement. It manages the two markers
 the `setup-worktree-discipline` hook reads in the repo containing your current
@@ -22,7 +28,8 @@ step. Without the global hook installed, the markers exist but nothing enforces 
 Pass the subcommand the user gave (`in`, `out`, `status`, or `doctor`; default `status`):
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status|doctor>
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status|doctor>
+# Otherwise:            bash <this-skill-dir>/scripts/worktree-enforce.sh <in|out|status|doctor>
 ```
 
 ## What each arg does

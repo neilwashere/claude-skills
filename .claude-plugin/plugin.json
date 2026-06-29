@@ -1,0 +1,7 @@
+{
+  "name": "git-worktree-skills",
+  "description": "Portable git/worktree workflow skills — branch discipline, worktree create/enter/dispose. Namespaced as git-worktree-skills:<skill>.",
+  "author": {
+    "name": "Neil Chambers"
+  }
+}

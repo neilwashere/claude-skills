@@ -1,13 +1,17 @@
 ---
 name: exit-and-dispose-worktree
 description: Use when a feature's PR has merged and its worktree should be torn down. Leaves the worktree session via the ExitWorktree tool, then removes the tree from disk with wt-rm.sh. Keywords worktree removal, wt-rm, dispose, teardown, cleanup, after merge.
+license: MIT
+compatibility: "Requires git and a POSIX shell. Claude Code leaves the session via ExitWorktree; elsewhere leave the worktree session manually, then run the removal script from the main checkout."
+metadata:
+  version: "1.0.0"
 ---
 
 # exit-and-dispose-worktree
 
 A **compound** workflow: leave the worktree session **and** dispose the tree. Two operations, and the split is forced by a hard constraint:
 
-- The harness **`ExitWorktree` tool** is the only thing that moves the session back to the main checkout — but `ExitWorktree({action: "remove"})` **refuses to delete a worktree it did not create.** Ours are created by `wt-new.sh` and entered by `path`, so the tool will not remove them.
+- Claude Code's **`ExitWorktree` tool** is the only thing that moves the session back to the main checkout — but `ExitWorktree({action: "remove"})` **refuses to delete a worktree it did not create.** Ours are created by `wt-new.sh` and entered by `path`, so the tool will not remove them.
 - `wt-rm.sh` (bundled) removes the tree from disk — but a script cannot move the session, so it must be run from the main checkout, *after* you have left.
 
 So: leave with the tool (`keep`), then dispose with the script.
@@ -18,18 +22,17 @@ Disposing before merge throws away the work (the branch reaches `main` only via 
 
 ## The flow
 
-**Step 1 — leave the session (the `ExitWorktree` tool, not Bash).** Use `keep`, never `remove` (remove is a no-op on our path-entered worktrees):
+**Step 1 — leave the worktree session, returning to the main checkout.**
 
-```
-ExitWorktree({ action: "keep" })
-```
-
-The session is now back in the main checkout. (If `ExitWorktree` reports no active worktree session, you are already in the main checkout — skip to Step 2.)
+- **Claude Code:** `ExitWorktree({ action: "keep" })` (use `keep`, never `remove` — `remove` is a no-op on path-entered worktrees).
+- **Other harnesses:** return to / open the main checkout directory yourself.
 
 **Step 2 — dispose the tree (Bash, from the main checkout):**
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <branch> [--force] \
+# Run the bundled scripts/wt-rm.sh from the main checkout, after you have left the worktree session.
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <branch> [--force] \
+# Otherwise:            bash <this-skill-dir>/scripts/wt-rm.sh <branch> [--force] \
   && git branch -d <branch>    # delete the merged branch — only if removal succeeded
 ```
 
@@ -37,7 +40,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" <
 
 ## Validate (after Step 2)
 
-Disposal is destructive and has silent failure modes — the Step 1 `ExitWorktree` is a no-op if no session was active (so you might still be effectively in the tree), and removing a tree you were still sitting in can leave a `prunable` stub. Assert the end-state:
+Disposal is destructive and has silent failure modes — in Claude Code, the Step 1 `ExitWorktree` is a no-op if no session was active (so you might still be effectively in the tree), and removing a tree you were still sitting in can leave a `prunable` stub. Assert the end-state:
 
 ```
 # Back in the main checkout? git-dir and git-common-dir resolve to the SAME real
@@ -56,4 +59,4 @@ git worktree list | grep -q prunable && git worktree prune
 
 ## Just want to leave, not dispose?
 
-To step out of a worktree but keep it on disk (switching tasks, coming back later), call the harness **`ExitWorktree({action: "keep"})` directly** — do not use this skill. This skill is specifically *exit + dispose*.
+To step out of a worktree but keep it on disk (switching tasks, coming back later), Claude Code: call **`ExitWorktree({action: "keep"})` directly** — do not use this skill. This skill is specifically *exit + dispose*.
