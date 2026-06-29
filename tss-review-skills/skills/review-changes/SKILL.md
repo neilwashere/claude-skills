@@ -94,9 +94,14 @@ To render findings as inline GitHub PR comments:
 bash scripts/post-to-pr.sh --dry-run .reviews/<run-id>/ledger.json <commit-sha>
 ```
 
-Remove `--dry-run` to POST to the GitHub API. `post-to-pr.sh` builds a structured
-payload (commit ref, file path, line, body with severity emoji + title + detail +
-suggestion) for each finding in the ledger.
+To POST to the GitHub API, run the live form with `<owner/repo>` and `<pr#>`:
+
+```
+bash scripts/post-to-pr.sh .reviews/<run-id>/ledger.json <commit-sha> <owner/repo> <pr#>
+```
+
+`post-to-pr.sh` builds a structured payload (commit ref, file path, line, side, body
+with severity emoji + title + detail + suggestion) for each finding in the ledger.
 
 Always preview with `--dry-run` first.
 
@@ -244,12 +249,12 @@ bash scripts/post-to-pr.sh --dry-run <ledger-path> <commit-sha>
 ```
 
 ```
-bash scripts/post-to-pr.sh <ledger-path> <commit-sha>
+bash scripts/post-to-pr.sh <ledger-path> <commit-sha> <owner/repo> <pr#>
 ```
 
 - `--dry-run` — prints the structured payload to stdout; does not POST.
 - Without `--dry-run` — POSTs each finding as a GitHub inline comment via `gh api`.
-- Payload fields: `commit_id`, `event: "COMMENT"`, per-finding `path`/`position`/`body`.
+- Payload fields: `commit_id`, `event: "COMMENT"`, per-finding `path`/`line`/`side`/`body`.
 - Body renders: severity emoji + title + detail + suggestion (when present).
 
 Always preview with `--dry-run` before posting to a live PR.
