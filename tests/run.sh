@@ -18,6 +18,8 @@ SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
 RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
 MERGE="$RS_ROOT/skills/review-changes/scripts/merge-findings.sh"
 POST="$RS_ROOT/skills/review-changes/scripts/post-to-pr.sh"
+RC_SKILL="$RS_ROOT/skills/review-changes/SKILL.md"
+CHARTER="$RS_ROOT/skills/review-changes/references/reviewer-charter.md"
 
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
@@ -998,6 +1000,24 @@ test_post_aborts_on_bad_ledger() {
   printf '%s' 'nope' > "$d/ledger.json"
   assert_fails "post aborts on malformed ledger" bash "$POST" --dry-run "$d/ledger.json" deadbeef
   rm -rf "$d"
+}
+
+test_review_changes_skill_frontmatter() {
+  head -8 "$RC_SKILL" | grep -q '^name: review-changes' \
+    && printf 'PASS: %s\n' "review-changes SKILL has name" \
+    || { printf 'FAIL: review-changes SKILL name\n'; FAILED=1; }
+  # model-invokable: must NOT disable model invocation
+  if head -8 "$RC_SKILL" | grep -q '^disable-model-invocation: true'; then
+    printf 'FAIL: review-changes must be model-invokable\n'; FAILED=1
+  else printf 'PASS: %s\n' "review-changes is model-invokable"; fi
+}
+
+test_review_changes_charter_has_guardrails() {
+  local rc=0
+  grep -qi 'read-only' "$CHARTER" || { printf 'FAIL: charter missing read-only discipline\n'; rc=1; }
+  grep -qi 'recurrence\|previously-taught\|lessons' "$CHARTER" || { printf 'FAIL: charter missing recurrence check\n'; rc=1; }
+  grep -q 'findings\.' "$CHARTER" || { printf 'FAIL: charter missing output-file contract\n'; rc=1; }
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "charter carries the load-bearing guardrails" || FAILED=1
 }
 
 # Run every test_* function.
