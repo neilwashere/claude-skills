@@ -17,12 +17,15 @@ Interactive setup for the **worktree-config** marker family
 
 ## How it works
 
-Ask the questions below with the `AskUserQuestion` tool, assemble a JSON
-object from the answers (include **only** fields the user actively set — omit a
-field to keep its built-in default), then write it to the chosen tier:
+Ask the questions below (Claude Code: the `AskUserQuestion` tool; other harnesses:
+prompt in chat), assemble a JSON object from the answers (include **only** fields
+the user actively set — omit a field to keep its built-in default), then write it
+to the chosen tier by piping the JSON into the bundled `scripts/configure-worktree.sh`:
 
 ```bash
-printf '%s' '<assembled-json>' | bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" <global|committed|local>
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" <global|committed|local>
+# Otherwise:            bash <this-skill-dir>/scripts/configure-worktree.sh <global|committed|local>
+printf '%s' '<assembled-json>' | bash <configure-worktree.sh> <global|committed|local>
 ```
 
 The script merges your fields over any existing tier file (your values win per
@@ -58,7 +61,8 @@ Omit any of **Location / Stack / Mirror** the user left at its default. **Always
 To see the resolved config (all tiers composed), run `status`:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" status
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/configure-worktree/scripts/configure-worktree.sh" status
+# Otherwise:            bash <this-skill-dir>/scripts/configure-worktree.sh status
 ```
 
 It prints each field's effective value and which tier it came from (local / committed / global / default).
