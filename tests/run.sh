@@ -22,6 +22,7 @@ MERGE="$RS_ROOT/skills/review-changes/scripts/merge-findings.sh"
 POST="$RS_ROOT/skills/review-changes/scripts/post-to-pr.sh"
 RC_SKILL="$RS_ROOT/skills/review-changes/SKILL.md"
 CHARTER="$RS_ROOT/skills/review-changes/references/reviewer-charter.md"
+SY_SKILL="$RS_ROOT/skills/synthesize-review-learnings/SKILL.md"
 
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
@@ -1072,6 +1073,24 @@ test_readme_points_at_lessons() {
   grep -q 'docs/contributing/lessons' "$ROOT/README.md" \
     && printf 'PASS: %s\n' "README links the lessons index" \
     || { printf 'FAIL: README does not link lessons index\n'; FAILED=1; }
+}
+
+test_synthesize_skill_is_user_invoked() {
+  head -8 "$SY_SKILL" | grep -q '^name: synthesize-review-learnings' \
+    && printf 'PASS: %s\n' "synthesize SKILL has name" \
+    || { printf 'FAIL: synthesize SKILL name\n'; FAILED=1; }
+  head -8 "$SY_SKILL" | grep -q '^disable-model-invocation: true' \
+    && printf 'PASS: %s\n' "synthesize is user-invoked" \
+    || { printf 'FAIL: synthesize must set disable-model-invocation: true\n'; FAILED=1; }
+}
+
+test_synthesize_skill_covers_pipeline() {
+  local rc=0
+  grep -qi 'teachability\|severity.*MEDIUM\|multi-model\|recurr' "$SY_SKILL" || { printf 'FAIL: missing teachability filter\n'; rc=1; }
+  grep -qi 'strengthen\|occurrences\|dedup' "$SY_SKILL" || { printf 'FAIL: missing dedup/strengthen step\n'; rc=1; }
+  grep -q 'check-index.sh' "$SY_SKILL" || { printf 'FAIL: missing index-integrity check\n'; rc=1; }
+  grep -qi 'no model names\|anonymis\|anonymiz' "$SY_SKILL" || { printf 'FAIL: missing anonymisation rule\n'; rc=1; }
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "synthesize SKILL covers the pipeline" || FAILED=1
 }
 
 # Run every test_* function.
