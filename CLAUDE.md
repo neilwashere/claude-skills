@@ -17,4 +17,4 @@ For live, git-synced local development, point the marketplace at your checkout i
 
 ## Contributor guidance
 
-When writing or reviewing code here, follow [docs/contributing/closing-the-verification-loop.md](./docs/contributing/closing-the-verification-loop.md): make tests falsifiable (watch them fail before trusting them), verify behaviour by running it rather than describing it, treat tool versions / platform / CI merge-commit semantics as inputs rather than constants, and design the failure path of every destructive operation (guard-then-act, write-to-temp-then-rename, never half-complete or report success on a swallowed error).
+When writing or reviewing code here, follow the [contributor lessons index](./docs/contributing/lessons/INDEX.md): make tests falsifiable (watch them fail before trusting them), verify behaviour by running it rather than describing it, treat tool versions / platform / CI merge-commit semantics as inputs rather than constants, and design the failure path of every destructive operation (guard-then-act, write-to-temp-then-rename, never half-complete or report success on a swallowed error).

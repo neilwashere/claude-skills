@@ -13,6 +13,8 @@ LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
 source "$LIB"
 
 RS_ROOT="$ROOT/tss-review-skills"
+CHECK_INDEX="$RS_ROOT/skills/synthesize-review-learnings/scripts/check-index.sh"
+LESSONS="$ROOT/docs/contributing/lessons"
 MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
 SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
 RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
@@ -1018,6 +1020,40 @@ test_review_changes_charter_has_guardrails() {
   grep -qi 'recurrence\|previously-taught\|lessons' "$CHARTER" || { printf 'FAIL: charter missing recurrence check\n'; rc=1; }
   grep -q 'findings\.' "$CHARTER" || { printf 'FAIL: charter missing output-file contract\n'; rc=1; }
   [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "charter carries the load-bearing guardrails" || FAILED=1
+}
+
+test_check_index_catches_unlisted_lesson() {
+  local d; d="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nstatus: active\n---\nbody\n' > "$d/logic-orphan.md"
+  printf '# Lessons index\n' > "$d/INDEX.md"   # lesson present but not linked
+  assert_fails "check-index flags an unlisted lesson" bash "$CHECK_INDEX" "$d"
+  rm -rf "$d"
+}
+
+test_check_index_catches_missing_frontmatter_key() {
+  local d; d="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\n---\nbody\n' > "$d/logic-thin.md"   # missing keys
+  printf '# Lessons index\n\n- [t](logic-thin.md)\n' > "$d/INDEX.md"
+  assert_fails "check-index flags missing frontmatter keys" bash "$CHECK_INDEX" "$d"
+  rm -rf "$d"
+}
+
+test_seed_lessons_pass_integrity() {
+  bash "$CHECK_INDEX" "$LESSONS" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "shipped lessons/ pass index integrity" \
+    || { printf 'FAIL: shipped lessons/ fail index integrity\n'; FAILED=1; }
+}
+
+test_essay_retired() {
+  if [ -f "$ROOT/docs/contributing/closing-the-verification-loop.md" ]; then
+    printf 'FAIL: retired essay still present\n'; FAILED=1
+  else printf 'PASS: %s\n' "verification essay retired"; fi
+}
+
+test_readme_points_at_lessons() {
+  grep -q 'docs/contributing/lessons' "$ROOT/README.md" \
+    && printf 'PASS: %s\n' "README links the lessons index" \
+    || { printf 'FAIL: README does not link lessons index\n'; FAILED=1; }
 }
 
 # Run every test_* function.
