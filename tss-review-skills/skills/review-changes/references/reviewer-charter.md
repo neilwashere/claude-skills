@@ -181,8 +181,7 @@ Optional fields (include when you have them):
 {
   "end_line": 47,
   "side": "RIGHT",
-  "suggestion": "Concrete fix or alternative.",
-  "recurrence_of": "lesson-filename.md"
+  "suggestion": "Concrete fix or alternative."
 }
 ```
 

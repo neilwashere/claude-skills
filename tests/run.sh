@@ -1093,6 +1093,58 @@ test_synthesize_skill_covers_pipeline() {
   [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "synthesize SKILL covers the pipeline" || FAILED=1
 }
 
+test_merge_max_severity_survivor() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":10,"title":"kimi-low","detail":"dk"}]' > "$d/findings.kimi.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"opus-high","detail":"do"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "1" "same tuple collapses"
+  assert_eq "$(jq -r '.[0].severity' "$d/ledger.json")" "high" "merged finding keeps MAX severity"
+  assert_eq "$(jq -r '.[0].title' "$d/ledger.json")" "opus-high" "merged finding keeps max-severity member fields"
+  assert_eq "$(jq -r '.[0].raised_by | sort | join(",")' "$d/ledger.json")" "kimi,opus" "raised_by still unions"
+  rm -rf "$d"
+}
+
+test_merge_round_aware_reconciles() {
+  local d; d="$(mktemp -d)"
+  # Round 1: A (logic,a.sh,10) + B (security,b.sh,5)
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"},{"dimension":"security","severity":"medium","file":"b.sh","line":5,"title":"B","detail":"db"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  local aid; aid="$(jq -r '.[] | select(.file=="a.sh") | .id' "$d/ledger.json")"
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .round' "$d/ledger.json")" "1" "round-1 finding stamped round 1"
+  # Driver addresses B in place
+  printf '%s' "$(jq 'map(if .file=="b.sh" then .status="addressed" | .resolution="fixed B" else . end)' "$d/ledger.json")" > "$d/ledger.json"
+  # Round 2: re-flag A only, plus NEW finding C
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"},{"dimension":"testing","severity":"low","file":"c.sh","line":1,"title":"C","detail":"dc"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .round' "$d/ledger.json")" "1" "re-flagged finding keeps first-appearance round"
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .id' "$d/ledger.json")" "$aid" "re-flagged finding keeps its id"
+  assert_eq "$(jq -r '.[] | select(.file=="b.sh") | .status' "$d/ledger.json")" "addressed" "unflagged addressed finding preserved"
+  assert_eq "$(jq -r '.[] | select(.file=="b.sh") | .resolution' "$d/ledger.json")" "fixed B" "unflagged finding keeps resolution"
+  assert_eq "$(jq -r '.[] | select(.file=="c.sh") | .round' "$d/ledger.json")" "2" "new finding stamped round 2"
+  assert_eq "$(jq -r '.[] | select(.file=="c.sh") | .status' "$d/ledger.json")" "open" "new finding open"
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "3" "ledger reconciles to 3 findings"
+  rm -rf "$d"
+}
+
+test_merge_wontfix_survives_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="wontfix" | .resolution="by design")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "wontfix" "wontfix survives re-flag"
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_malformed_prior_ledger() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' 'not json' > "$d/ledger.json"           # malformed prior ledger
+  assert_fails "merge aborts on malformed prior ledger" bash "$MERGE" "$d" --round 2
+  rm -rf "$d"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"

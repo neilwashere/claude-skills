@@ -107,14 +107,51 @@ Always preview with `--dry-run` first.
 
 ### Step 6 — Address loop
 
-The driver (you) works through `open` findings in the ledger:
+The loop is round-aware:
 
-1. For each `high` or `medium` finding: fix it, then set `status: "addressed"` and
-   `resolution: "<what was done>"` in the ledger.
-2. For findings you will not fix: set `status: "wontfix"` and `resolution: "<rationale>"`.
-   The rationale is synthesis signal — a wontfix with a weak rationale is a red flag.
-3. Re-run `merge-findings.sh` with `--round N+1` to merge a second round of
-   reviewer output against the updated diff.
+**Round 1** (first pass):
+
+```
+bash scripts/merge-findings.sh .reviews/<run-id> --round 1
+```
+
+Produces `ledger.json` with every finding stamped `status: "open"`, `round: 1`.
+New findings get IDs in the scheme `r<round>-<n>` (e.g. `r1-1`, `r1-2`).
+
+**Between rounds — driver edits `ledger.json` in place:**
+
+- For each `high` or `medium` finding you fixed: set `status: "addressed"` and
+  `resolution: "<what was done>"`.
+- For findings you will not fix: set `status: "wontfix"` and `resolution: "<rationale>"`.
+  The rationale is synthesis signal — a wontfix with a weak rationale is a red flag.
+
+Do not re-run `merge-findings.sh` yet — edit the ledger first.
+
+**Re-review (round N+1):**
+
+Each reviewer re-examines the updated diff and **overwrites** their
+`findings.<model>.json` in the same run directory with whatever they still see.
+Then run:
+
+```
+bash scripts/merge-findings.sh .reviews/<run-id> --round N+1
+```
+
+`merge-findings.sh` **reconciles** this round's incoming findings against the
+existing ledger using the following policy:
+
+- **Re-flagged finding** (tuple in prior ledger AND flagged again this round):
+  preserves the prior `id` and `round` (first appearance); `raised_by` is
+  unioned; displayed fields (severity/title/detail/suggestion) come from
+  whichever of {prior, current} has the higher severity; `status` is kept
+  `wontfix` if the prior was `wontfix` (the driver's explicit decision stands),
+  otherwise reset to `open` (a reviewer still flags it).
+- **Unflagged finding** (tuple in prior ledger, not flagged this round):
+  kept verbatim — preserves the driver's `status`, `resolution`, and `round`.
+- **New finding** (not in prior ledger): added as `status: "open"` at round N+1
+  with a fresh `id` in the `r<round>-<n>` scheme.
+- **Malformed prior ledger guard**: if `ledger.json` exists but is not a JSON
+  array, the script aborts — it never clobbers a malformed prior.
 
 **Convergence rule:** the loop exits when no `open` finding is `high` or `medium`.
 Every `medium` must be either `addressed` or `wontfix` with a written rationale.
@@ -209,7 +246,7 @@ Its schema is defined in `references/ledger-schema.json`. Key fields per finding
 
 | Field | Role |
 |---|---|
-| `id` | Driver-assigned unique ID (e.g. `r1-001`) |
+| `id` | Driver-assigned unique ID (e.g. `r1-1`) |
 | `dimension` | One of the 10 rubric keys |
 | `severity` | `high`, `medium`, or `low` |
 | `file` | Repo-relative path |
