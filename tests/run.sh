@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
-# shellcheck disable=SC2317,SC2329,SC2016,SC2015
+# shellcheck disable=SC2317,SC2329,SC2016,SC2015,SC2030,SC2031
 #   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
 #     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
 #   SC2016: literal $HOME in printf strings (writing JSON settings files)
@@ -885,6 +885,35 @@ test_cfgstatus_branchNaming_non_object() {
     && printf 'PASS: %s\n' "cfg-status shows <error> for bad branchNaming" \
     || { printf 'FAIL: cfg-status did not handle bad branchNaming\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
+}
+
+# --- lib resolution under a symlinked install (install.sh default) ---
+test_symlinked_skill_resolves_shared_lib() {
+  local sb; sb="$(new_sandbox)"
+  mkdir -p "$sb/agents/skills"
+  ln -s "$ROOT/skills/configure-worktree" "$sb/agents/skills/configure-worktree"
+  ( cd "$sb" && git init -q repo && cd repo \
+      && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+    out="$(bash "$sb/agents/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
+    case "$out" in
+      *"missing config lib"*) printf 'FAIL symlinked skill could not find shared lib\n'; FAILED=1 ;;
+      *) printf 'PASS symlinked skill resolves shared lib\n' ;;
+    esac )
+}
+
+# --- lib resolution when vendored beside the script (install.sh --copy) ---
+test_vendored_lib_resolves_when_shared_absent() {
+  local sb; sb="$(new_sandbox)"
+  mkdir -p "$sb/skills"
+  cp -r "$ROOT/skills/configure-worktree" "$sb/skills/configure-worktree"   # no lib/ at $sb
+  cp "$ROOT/lib/worktree-config.sh" "$sb/skills/configure-worktree/scripts/worktree-config.sh"
+  ( cd "$sb" && git init -q repo && cd repo \
+      && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+    out="$(bash "$sb/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
+    case "$out" in
+      *"missing config lib"*) printf 'FAIL vendored sibling lib not found\n'; FAILED=1 ;;
+      *) printf 'PASS vendored sibling lib resolves\n' ;;
+    esac )
 }
 
 # Run every test_* function.

@@ -8,8 +8,12 @@
 #   configure-worktree.sh status
 set -euo pipefail
 
-WTC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WTC_LIB="$WTC_DIR/../../../lib/worktree-config.sh"
+WTC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+WTC_LIB=""
+for _cand in "$WTC_DIR/../../../lib/worktree-config.sh" "$WTC_DIR/worktree-config.sh"; do
+  [ -f "$_cand" ] && { WTC_LIB="$_cand"; break; }
+done
+[ -n "$WTC_LIB" ] || WTC_LIB="$WTC_DIR/../../../lib/worktree-config.sh"   # keep a path for the error message below
 
 scope="${1:?usage: configure-worktree.sh <global|committed|local|status>}"
 

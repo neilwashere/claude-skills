@@ -12,11 +12,12 @@
 # Usage: wt-rm.sh <branch-or-path> [--force]
 set -euo pipefail
 
-_WTR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_WTC_LIB="$_WTR_DIR/../../../lib/worktree-config.sh"
-if [ ! -f "$_WTC_LIB" ]; then
-  echo "wt-rm: missing config lib at $_WTC_LIB (broken plugin install)" >&2; exit 1
-fi
+_WTR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+_WTC_LIB=""
+for _cand in "$_WTR_DIR/../../../lib/worktree-config.sh" "$_WTR_DIR/worktree-config.sh"; do
+  [ -f "$_cand" ] && { _WTC_LIB="$_cand"; break; }
+done
+[ -n "$_WTC_LIB" ] || { echo "wt-rm: missing config lib (looked in ../../../lib and beside the script)" >&2; exit 1; }
 # shellcheck source=/dev/null
 . "$_WTC_LIB"
 

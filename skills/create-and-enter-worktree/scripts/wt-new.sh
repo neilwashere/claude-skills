@@ -31,11 +31,12 @@ set -euo pipefail
 
 # Resolve the shared config lib relative to THIS script (fail loud if absent —
 # it ships with the plugin; a missing copy means a broken install).
-_WTN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_WTC_LIB="$_WTN_DIR/../../../lib/worktree-config.sh"
-if [ ! -f "$_WTC_LIB" ]; then
-  echo "wt-new: missing config lib at $_WTC_LIB (broken plugin install)" >&2; exit 1
-fi
+_WTN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+_WTC_LIB=""
+for _cand in "$_WTN_DIR/../../../lib/worktree-config.sh" "$_WTN_DIR/worktree-config.sh"; do
+  [ -f "$_cand" ] && { _WTC_LIB="$_cand"; break; }
+done
+[ -n "$_WTC_LIB" ] || { echo "wt-new: missing config lib (looked in ../../../lib and beside the script)" >&2; exit 1; }
 # shellcheck source=/dev/null
 . "$_WTC_LIB"
 
