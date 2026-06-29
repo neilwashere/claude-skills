@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/run.sh — plain-bash tests for the worktree config resolver.
-# shellcheck disable=SC2317,SC2329,SC2016,SC2015,SC2030,SC2031
+# shellcheck disable=SC2317,SC2329,SC2016,SC2015
 #   SC2317 / SC2329: test_* functions invoked dynamically via declare -F | grep
 #     (SC2317 is the 0.9.x name; SC2329 is 0.10+. Both suppressed.)
 #   SC2016: literal $HOME in printf strings (writing JSON settings files)
@@ -892,13 +892,14 @@ test_symlinked_skill_resolves_shared_lib() {
   local sb; sb="$(new_sandbox)"
   mkdir -p "$sb/agents/skills"
   ln -s "$ROOT/skills/configure-worktree" "$sb/agents/skills/configure-worktree"
-  ( cd "$sb" && git init -q repo && cd repo \
-      && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
-    out="$(bash "$sb/agents/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
-    case "$out" in
-      *"missing config lib"*) printf 'FAIL symlinked skill could not find shared lib\n'; FAILED=1 ;;
-      *) printf 'PASS symlinked skill resolves shared lib\n' ;;
-    esac )
+  git init -q "$sb/repo"
+  git -C "$sb/repo" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+  local out
+  out="$(cd "$sb/repo" && bash "$sb/agents/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
+  case "$out" in
+    *"missing config lib"*) printf 'FAIL symlinked skill could not find shared lib\n'; FAILED=1 ;;
+    *) printf 'PASS symlinked skill resolves shared lib\n' ;;
+  esac
 }
 
 # --- lib resolution when vendored beside the script (install.sh --copy) ---
@@ -907,13 +908,29 @@ test_vendored_lib_resolves_when_shared_absent() {
   mkdir -p "$sb/skills"
   cp -r "$ROOT/skills/configure-worktree" "$sb/skills/configure-worktree"   # no lib/ at $sb
   cp "$ROOT/lib/worktree-config.sh" "$sb/skills/configure-worktree/scripts/worktree-config.sh"
-  ( cd "$sb" && git init -q repo && cd repo \
-      && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
-    out="$(bash "$sb/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
-    case "$out" in
-      *"missing config lib"*) printf 'FAIL vendored sibling lib not found\n'; FAILED=1 ;;
-      *) printf 'PASS vendored sibling lib resolves\n' ;;
-    esac )
+  git init -q "$sb/repo"
+  git -C "$sb/repo" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+  local out
+  out="$(cd "$sb/repo" && bash "$sb/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
+  case "$out" in
+    *"missing config lib"*) printf 'FAIL vendored sibling lib not found\n'; FAILED=1 ;;
+    *) printf 'PASS vendored sibling lib resolves\n' ;;
+  esac
+}
+
+# --- neither candidate present → fail loud (guards the fallback search) ---
+test_missing_both_candidates_fails_loud() {
+  local sb; sb="$(new_sandbox)"
+  mkdir -p "$sb/skills"
+  cp -r "$ROOT/skills/configure-worktree" "$sb/skills/configure-worktree"   # no ../../../lib at $sb
+  rm -f "$sb/skills/configure-worktree/scripts/worktree-config.sh"          # and no vendored sibling
+  git init -q "$sb/repo"
+  git -C "$sb/repo" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+  local out rc
+  out="$(cd "$sb/repo" && bash "$sb/skills/configure-worktree/scripts/configure-worktree.sh" status 2>&1)"; rc=$?
+  { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "missing config lib"; } \
+    && printf 'PASS missing lib fails loud\n' \
+    || { printf 'FAIL missing lib did not fail loud (rc=%s)\n' "$rc"; FAILED=1; }
 }
 
 # Run every test_* function.
