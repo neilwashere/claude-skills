@@ -1,20 +1,5 @@
-This repo is a Claude Code **marketplace** hosting a single plugin, `tss-git-skills`, whose skills invoke as `tss-git-skills:<skill-name>`. The plugin lives in its own subtree `./tss-git-skills/` with a flat `skills/` and its own `README.md`; the repo root holds only the marketplace manifest.
+@AGENTS.md
 
-Why the subtree / flat `skills/`: Claude Code auto-scans a plugin's `skills/` at depth-1, so a flat `skills/` is auto-discovered and `tss-git-skills/.claude-plugin/plugin.json` needs no `skills` array (and no `hooks`/`commands` keys unless it ships plugin-level ones).
+## Claude-specific notes
 
-`tss-git-skills/README.md` lists every skill, grouped **User-invoked** / **Model-invoked**, each name linked to its `SKILL.md`. Every `SKILL.md` is either user-invoked (`disable-model-invocation: true`, reachable only by the human) or model-invoked (model- or user-reachable).
-
-## Install
-
-From GitHub:
-
-```
-/plugin marketplace add neilwashere/claude-skills
-/plugin install tss-git-skills@neilwashere
-```
-
-For live, git-synced local development, point the marketplace at your checkout instead: `/plugin marketplace add /path/to/claude-skills`.
-
-## Contributor guidance
-
-When writing or reviewing code here, follow [docs/contributing/closing-the-verification-loop.md](./docs/contributing/closing-the-verification-loop.md): make tests falsifiable (watch them fail before trusting them), verify behaviour by running it rather than describing it, treat tool versions / platform / CI merge-commit semantics as inputs rather than constants, and design the failure path of every destructive operation (guard-then-act, write-to-temp-then-rename, never half-complete or report success on a swallowed error).
+This repo ships as a Claude Code marketplace plugin (`.claude-plugin/`), installable with `/plugin install git-worktree-skills@neilwashere`. Claude Code is the first-class target: skills work fully here (session relocation via `EnterWorktree`/`ExitWorktree`, write-enforcement via the `PreToolUse` hook). See `docs/SUPPORT-MATRIX.md` for behaviour on other harnesses.
