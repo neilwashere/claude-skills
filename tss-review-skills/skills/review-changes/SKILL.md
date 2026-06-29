@@ -246,7 +246,7 @@ Its schema is defined in `references/ledger-schema.json`. Key fields per finding
 
 | Field | Role |
 |---|---|
-| `id` | Driver-assigned unique ID (e.g. `r1-1`) |
+| `id` | Unique ID assigned by merge-findings.sh (e.g. `r1-1`) |
 | `dimension` | One of the 10 rubric keys |
 | `severity` | `high`, `medium`, or `low` |
 | `file` | Repo-relative path |

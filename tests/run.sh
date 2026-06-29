@@ -1145,6 +1145,17 @@ test_merge_aborts_on_malformed_prior_ledger() {
   rm -rf "$d"
 }
 
+test_merge_addressed_reopens_on_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="addressed" | .resolution="tried")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "addressed finding reopens when re-flagged"
+  assert_eq "$(jq -r '.[0].round' "$d/ledger.json")" "1" "reopened finding keeps first-appearance round"
+  rm -rf "$d"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"

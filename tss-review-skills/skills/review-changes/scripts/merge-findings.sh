@@ -99,5 +99,4 @@ jq -n --argjson round "$round" --slurpfile inc "$tmp_inc" --slurpfile pri "$tmp_
 ' > "$tmp"
 
 mv "$tmp" "$ledger"
-trap - EXIT
 printf 'merged %d reviewer file(s), round %s -> %s\n' "${#files[@]}" "$round" "$ledger" >&2

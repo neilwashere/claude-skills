@@ -62,3 +62,28 @@ grep -c recurrence_of tss-review-skills/skills/review-changes/references/reviewe
   optional fields JSON block in `reviewer-charter.md`; `recurrence_of` count = 0.
   SKILL.md Step 6 rewritten to describe the round-aware address loop with the
   four-bullet reconciliation policy; `id` example updated to `r1-1` scheme.
+
+## Cleanup pass
+
+### Leak check (Fix 1 — temp-file resource leak)
+
+`trap - EXIT` removed from `merge-findings.sh`; EXIT trap now fires on every exit
+path. Verification: `before=0 after=0` — no leftover files in isolated TMPDIR.
+
+### New test PASS lines (Fix 2 — addressed→reflag→reopen)
+
+```
+PASS: addressed finding reopens when re-flagged
+PASS: reopened finding keeps first-appearance round
+```
+
+### shellcheck result (Fix 1)
+
+```
+shellcheck tss-review-skills/skills/review-changes/scripts/merge-findings.sh
+→ exit 0 (no findings)
+```
+
+### SKILL.md wording (Fix 3)
+
+`id` field label changed from "Driver-assigned" to "assigned by merge-findings.sh".
