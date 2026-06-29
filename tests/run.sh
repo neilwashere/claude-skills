@@ -1024,6 +1024,15 @@ test_review_changes_charter_has_guardrails() {
 
 test_check_index_catches_unlisted_lesson() {
   local d; d="$(mktemp -d)"
+  # Positive control: a well-formed dir (all required keys, lesson linked) must exit 0.
+  local good; good="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$good/logic-good.md"
+  printf '# Lessons index\n\n- [t](logic-good.md)\n' > "$good/INDEX.md"
+  bash "$CHECK_INDEX" "$good" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "check-index exits 0 on well-formed dir (positive control)" \
+    || { printf 'FAIL: check-index non-zero on well-formed dir (positive control)\n'; FAILED=1; }
+  rm -rf "$good"
+  # Negative: orphan lesson not linked from INDEX.md.
   printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nstatus: active\n---\nbody\n' > "$d/logic-orphan.md"
   printf '# Lessons index\n' > "$d/INDEX.md"   # lesson present but not linked
   assert_fails "check-index flags an unlisted lesson" bash "$CHECK_INDEX" "$d"
@@ -1032,6 +1041,15 @@ test_check_index_catches_unlisted_lesson() {
 
 test_check_index_catches_missing_frontmatter_key() {
   local d; d="$(mktemp -d)"
+  # Positive control: a well-formed dir (all required keys, lesson linked) must exit 0.
+  local good; good="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$good/logic-good.md"
+  printf '# Lessons index\n\n- [t](logic-good.md)\n' > "$good/INDEX.md"
+  bash "$CHECK_INDEX" "$good" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "check-index exits 0 on well-formed dir (positive control)" \
+    || { printf 'FAIL: check-index non-zero on well-formed dir (positive control)\n'; FAILED=1; }
+  rm -rf "$good"
+  # Negative: lesson linked but with missing frontmatter keys.
   printf -- '---\ntitle: t\ndimension: logic\n---\nbody\n' > "$d/logic-thin.md"   # missing keys
   printf '# Lessons index\n\n- [t](logic-thin.md)\n' > "$d/INDEX.md"
   assert_fails "check-index flags missing frontmatter keys" bash "$CHECK_INDEX" "$d"

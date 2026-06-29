@@ -24,10 +24,10 @@ divergence is usually silent — both paths look correct in isolation.
 
 ```bash
 # Original helper already handles tier precedence and type coercion.
-_wtc_field_raw() { ... }
+_my_helper() { ... }
 
 # Inline re-implementation in a new script — subtly misses the local-tier check.
-val="$(jq -r ".myField // empty" "$REPO/.claude/worktree-config.json" 2>/dev/null)"
+val="$(jq -r ".myField // empty" "$REPO/config.json" 2>/dev/null)"
 ```
 
 ## Fix
@@ -39,7 +39,7 @@ need, extend it there rather than duplicating its body elsewhere.
 # source the library that owns this concern
 # shellcheck source=/dev/null
 source "$LIB"
-val="$(_wtc_field_raw "$REPO" myField)"
+val="$(_my_helper "$REPO" myField)"
 ```
 
 ## Habit

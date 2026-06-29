@@ -13,7 +13,7 @@ dir="${1:-}"
 index="$dir/INDEX.md"
 [ -f "$index" ] || die "missing INDEX.md in $dir"
 
-req=(title dimension severity occurrences first_seen last_seen status)
+req=(title dimension severity occurrences first_seen last_seen sources status)
 rc=0
 
 shopt -s nullglob
