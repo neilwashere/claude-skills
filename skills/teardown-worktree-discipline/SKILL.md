@@ -10,7 +10,7 @@ metadata:
 
 # Teardown Worktree Discipline
 
-> **Claude Code only.** This installs a `PreToolUse` hook and `~/.claude` integration — mechanisms no other harness has. There is no portable equivalent; see `docs/SUPPORT-MATRIX.md`.
+> **Claude Code only.** This removes a `PreToolUse` hook and `~/.claude` integration — mechanisms no other harness has. There is no portable equivalent; see `docs/SUPPORT-MATRIX.md`.
 
 The exact reverse of `setup-worktree-discipline`, run deliberately by the human. Use it when you want the enforcement gone — whether you're uninstalling the plugin or just turning the discipline off globally.
 
