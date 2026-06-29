@@ -10,6 +10,8 @@ metadata:
 
 # worktree-enforce
 
+> **Mostly Claude Code.** Marker management (in/out/status) works anywhere; the enforcement it toggles is applied only by the Claude Code hook from setup-worktree-discipline.
+
 Per-repo control over worktree-discipline enforcement. It manages the two markers
 the `setup-worktree-discipline` hook reads in the repo containing your current
 directory:
@@ -26,7 +28,8 @@ step. Without the global hook installed, the markers exist but nothing enforces 
 Pass the subcommand the user gave (`in`, `out`, `status`, or `doctor`; default `status`):
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status|doctor>
+# Claude Code (plugin): bash "${CLAUDE_PLUGIN_ROOT}/skills/worktree-enforce/scripts/worktree-enforce.sh" <in|out|status|doctor>
+# Otherwise:            bash <this-skill-dir>/scripts/worktree-enforce.sh <in|out|status|doctor>
 ```
 
 ## What each arg does
