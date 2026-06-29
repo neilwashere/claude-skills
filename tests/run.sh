@@ -14,6 +14,8 @@ source "$LIB"
 
 RS_ROOT="$ROOT/tss-review-skills"
 MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
+SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
+RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
 
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
@@ -902,6 +904,25 @@ test_review_plugin_manifest_valid() {
     || { printf 'FAIL: review plugin.json invalid JSON\n'; FAILED=1; }
   assert_eq "$(jq -r '.name' "$RS_ROOT/.claude-plugin/plugin.json")" "tss-review-skills" \
     "plugin.json name"
+}
+
+test_ledger_schema_valid() {
+  jq empty "$SCHEMA" 2>/dev/null \
+    && printf 'PASS: %s\n' "ledger-schema.json is valid JSON" \
+    || { printf 'FAIL: ledger-schema.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq '.["$defs"].finding.properties.dimension.enum | length' "$SCHEMA")" "10" \
+    "schema enumerates 10 dimensions"
+  assert_eq "$(jq -r '.["$defs"].finding.properties.severity.enum | sort | join(",")' "$SCHEMA")" \
+    "high,low,medium" "schema severity enum"
+}
+
+test_rubric_lists_all_dimensions() {
+  local k rc=0
+  for k in logic error-handling testing architecture abstractions conciseness \
+           maintainability documentation security conventions; do
+    grep -q "\`$k\`" "$RUBRIC" || { printf 'FAIL: rubric missing dimension %s\n' "$k"; rc=1; }
+  done
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "rubric documents all 10 dimensions" || FAILED=1
 }
 
 # Run every test_* function.

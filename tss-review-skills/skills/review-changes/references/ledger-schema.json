@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Review findings ledger",
+  "type": "array",
+  "items": { "$ref": "#/$defs/finding" },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["id", "dimension", "severity", "file", "title", "detail", "raised_by", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "dimension": { "enum": ["logic", "error-handling", "testing", "architecture", "abstractions", "conciseness", "maintainability", "documentation", "security", "conventions"] },
+        "severity": { "enum": ["high", "medium", "low"] },
+        "file": { "type": "string" },
+        "line": { "type": ["integer", "null"] },
+        "end_line": { "type": ["integer", "null"] },
+        "side": { "enum": ["LEFT", "RIGHT"] },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "suggestion": { "type": ["string", "null"] },
+        "raised_by": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["open", "addressed", "wontfix", "disputed"] },
+        "resolution": { "type": ["string", "null"] },
+        "round": { "type": "integer" }
+      }
+    }
+  }
+}
