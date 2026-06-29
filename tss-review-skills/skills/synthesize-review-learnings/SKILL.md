@@ -36,8 +36,8 @@ Keep a finding only if it represents a *class* of mistake, not a one-off inciden
 Pass a finding when **any** of the following hold:
 
 - `severity ≥ MEDIUM` (i.e. `medium` or `high`)
-- The finding recurred across multiple rounds (`round` in the ledger was not 1, or
-  the driver had to revisit it)
+- The finding persisted across multiple rounds — the driver had to revisit it (its
+  `resolution` was filled in a later round than its `round`)
 - Multiple models flagged it (`raised_by` has 2 or more entries — multi-model
   agreement is the strongest teachability signal)
 - It recurs a known lesson (the principle already appears in `INDEX.md`)
@@ -63,7 +63,9 @@ lesson per PR finding.
 For each cluster, check `INDEX.md` in the lessons corpus:
 
 **Lesson already exists** → *strengthen* it:
-- Bump `occurrences` by the number of new instances.
+- Bump `occurrences` by 1 per harvest in which the lesson's class recurs (even if
+  that harvest surfaced several instances of it), so the counter tracks how many
+  harvests hit the weakness — its persistence — not raw finding count.
 - Update `last_seen` to today's date.
 - Add the new PR source(s) to `sources` (no model names — PR refs only).
 - Sharpen the example snippet if the new instance is clearer.
@@ -84,14 +86,14 @@ table in `INDEX.md`:
 ```
 # Lessons index
 
-| Title | Dimension | Severity | Occurrences | Link |
-|---|---|---|---|---|
-| Write-to-temp-then-rename … | error-handling | high | 3 | [link](error-handling-temp-then-rename.md) |
+| Lesson | Dimension | Severity | Seen |
+|---|---|---|---|
+| [Write-to-temp-then-rename for any in-place file edit](error-handling-temp-then-rename.md) | error-handling | high | 3 |
 ```
 
-Sort by dimension, then by occurrences descending (most-recurring first within a
-dimension). Every lesson file must have exactly one row; every row must point to an
-existing file.
+New lessons are APPENDED as rows; existing rows are left in place so the harvest
+produces a minimal diff. Every lesson file must have exactly one row; every row must
+point to an existing file.
 
 ### Step 6 — Report the harvest
 
