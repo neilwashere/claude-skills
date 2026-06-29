@@ -933,6 +933,80 @@ test_missing_both_candidates_fails_loud() {
     || { printf 'FAIL missing lib did not fail loud (rc=%s)\n' "$rc"; FAILED=1; }
 }
 
+# --- install.sh: symlink into both targets, idempotent, uninstall owns-only ---
+test_install_symlinks_both_targets() {
+  local sb; sb="$(new_sandbox)"
+  bash "$ROOT/install.sh" --agents-dir "$sb/agents" --claude-dir "$sb/claude" >/dev/null
+  local n_a n_c
+  n_a="$(find "$sb/agents" -maxdepth 1 -type l | wc -l | tr -d ' ')"
+  n_c="$(find "$sb/claude" -maxdepth 1 -type l | wc -l | tr -d ' ')"
+  local want; want="$(bash "$ROOT/install.sh" --list | wc -l | tr -d ' ')"
+  { [ "$n_a" = "$want" ] && [ "$n_c" = "$want" ]; } \
+    && printf 'PASS install symlinks all skills into both targets\n' \
+    || { printf 'FAIL install: agents=%s claude=%s want=%s\n' "$n_a" "$n_c" "$want"; FAILED=1; }
+  # link resolves to the real skill
+  [ "$(readlink "$sb/agents/configure-worktree")" = "$ROOT/skills/configure-worktree" ] \
+    && printf 'PASS link points at source\n' || { printf 'FAIL link target wrong\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_install_is_idempotent() {
+  local sb; sb="$(new_sandbox)"
+  bash "$ROOT/install.sh" --agents-dir "$sb/agents" --claude-dir "" >/dev/null
+  local out
+  out="$(bash "$ROOT/install.sh" --agents-dir "$sb/agents" --claude-dir "" 2>&1)"
+  case "$out" in *"= $sb/agents/configure-worktree"*) printf 'PASS second run is a no-op\n' ;;
+    *) printf 'FAIL idempotency: %s\n' "$out"; FAILED=1 ;; esac
+  rm -rf "$sb"
+}
+
+test_install_refuses_foreign_path() {
+  local sb; sb="$(new_sandbox)"
+  mkdir -p "$sb/agents/configure-worktree"; echo mine > "$sb/agents/configure-worktree/keep.txt"
+  bash "$ROOT/install.sh" --agents-dir "$sb/agents" --claude-dir "" >/dev/null
+  [ -f "$sb/agents/configure-worktree/keep.txt" ] \
+    && printf 'PASS install leaves a foreign dir untouched\n' \
+    || { printf 'FAIL install clobbered a foreign dir\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+test_uninstall_owns_only() {
+  local sb; sb="$(new_sandbox)"
+  bash "$ROOT/install.sh" --agents-dir "$sb/agents" --claude-dir "" >/dev/null
+  mkdir -p "$sb/agents/foreign-skill"; echo x > "$sb/agents/foreign-skill/x"
+  bash "$ROOT/install.sh" --uninstall --agents-dir "$sb/agents" --claude-dir "" >/dev/null
+  { [ ! -e "$sb/agents/configure-worktree" ] && [ -f "$sb/agents/foreign-skill/x" ]; } \
+    && printf 'PASS uninstall removes ours, keeps foreign\n' \
+    || { printf 'FAIL uninstall scope wrong\n'; FAILED=1; }
+  rm -rf "$sb"
+}
+
+# Restructured from the brief's version:
+# - stamp-file existence is a real assertion that sets FAILED=1 on miss
+# - lib self-containment check sets FAILED=1 in the outer shell (no subshell)
+test_install_copy_is_self_contained() {
+  local sb; sb="$(new_sandbox)"
+  bash "$ROOT/install.sh" --copy --agents-dir "$sb/agents" --claude-dir "" >/dev/null
+  # Vendored lib is present beside the script.
+  [ -f "$sb/agents/configure-worktree/scripts/worktree-config.sh" ] \
+    && printf 'PASS copy mode vendors worktree-config.sh\n' \
+    || { printf 'FAIL copy mode missing vendored lib\n'; FAILED=1; }
+  # Stamp file is present.
+  [ -f "$sb/agents/configure-worktree/.git-worktree-skills-installed" ] \
+    && printf 'PASS copy mode writes stamp file\n' \
+    || { printf 'FAIL copy mode missing stamp file\n'; FAILED=1; }
+  # The copied skill runs without a shared lib/ nearby — FAILED=1 in outer shell.
+  git init -q "$sb/repo"
+  git -C "$sb/repo" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+  local out
+  out="$(cd "$sb/repo" && bash "$sb/agents/configure-worktree/scripts/configure-worktree.sh" status 2>&1)" || true
+  case "$out" in
+    *"missing config lib"*) printf 'FAIL copied skill lost its lib\n'; FAILED=1 ;;
+    *) printf 'PASS copy mode vendors a working lib\n' ;;
+  esac
+  rm -rf "$sb"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
