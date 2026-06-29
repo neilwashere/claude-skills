@@ -1,16 +1,16 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "neilwashere",
-  "description": "Curated git/worktree workflow skills for Claude Code.",
+  "description": "Portable git/worktree workflow skills (SKILL.md) installable in any agent harness; ships as a Claude Code plugin.",
   "owner": {
     "name": "Neil Chambers",
     "email": "neil@threadsafe.systems"
   },
   "plugins": [
     {
-      "name": "tss-git-skills",
-      "description": "Curated git/worktree workflow skills, namespaced as tss-git-skills:<skill>.",
-      "source": "./tss-git-skills",
+      "name": "git-worktree-skills",
+      "description": "Git/worktree workflow skills — branch discipline, worktree create/enter/dispose. Namespaced as git-worktree-skills:<skill>.",
+      "source": ".",
       "category": "development"
     }
   ]

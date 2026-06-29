@@ -8,7 +8,7 @@
 #     the printf always succeeds so the || branch is correct
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
+LIB="$ROOT/lib/worktree-config.sh"
 # shellcheck source=/dev/null
 source "$LIB"
 
@@ -129,7 +129,7 @@ test_wtnew_uses_configured_dir() {
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '{"worktreeDir":"%s/trees/{branch}"}' "$sb" > "$repo/.claude/worktree-config.json"
   local out
-  out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null )"
+  out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null )"
   assert_eq "$out" "$sb/trees/feat-x" "wt-new creates worktree at configured dir"
   [ -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "configured worktree dir exists" || { printf 'FAIL: configured dir missing\n'; FAILED=1; }
   rm -rf "$sb"
@@ -138,8 +138,12 @@ test_wtnew_fails_loud_without_lib() {
   local sb; sb="$(mktemp -d)"; local repo="$sb/repo"; mkdir -p "$repo/.claude"
   ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
-  cp -r "$ROOT/tss-git-skills" "$sb/plugin"
+  mkdir -p "$sb/plugin"
+  cp -r "$ROOT/skills" "$sb/plugin/skills"
+  cp -r "$ROOT/lib" "$sb/plugin/lib"
   rm -f "$sb/plugin/lib/worktree-config.sh"
+  # also remove any vendored sibling fallback so the lib is truly absent
+  rm -f "$sb/plugin/skills/create-and-enter-worktree/scripts/worktree-config.sh"
   assert_fails "wt-new fails loud when lib missing" bash -c \
     'cd "'"$repo"'" && HOME="'"$sb"'/home" bash "'"$sb"'/plugin/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main'
   rm -rf "$sb"
@@ -150,8 +154,8 @@ test_wtrm_removes_configured_dir() {
   ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '{"worktreeDir":"%s/trees/{branch}"}' "$sb" > "$repo/.claude/worktree-config.json"
-  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
-  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" feat/x ) >/dev/null 2>&1
+  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
+  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/skills/exit-and-dispose-worktree/scripts/wt-rm.sh" feat/x ) >/dev/null 2>&1
   [ ! -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "wt-rm removed configured-dir worktree" \
     || { printf 'FAIL: configured-dir worktree still present\n'; FAILED=1; }
   rm -rf "$sb"
@@ -162,7 +166,7 @@ test_hook_exempts_config_markers() {
   ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '{"enforce":true}' > "$repo/.claude/worktree-discipline.json"   # enforced main checkout
-  local hook="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+  local hook="$ROOT/skills/setup-worktree-discipline/worktree-discipline.sh"
   local ev
   for name in worktree-config.json worktree-config.local.json; do
     ev="$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s/.claude/%s"}}' "$repo" "$name")"
@@ -181,7 +185,7 @@ test_hook_denies_new_subdir_write() {
   ( cd "$repo" && git init -q && git config user.email a@b.c && git config user.name a \
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '{"enforce":true}' > "$repo/.claude/worktree-discipline.json"   # enforced main checkout
-  local hook="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+  local hook="$ROOT/skills/setup-worktree-discipline/worktree-discipline.sh"
   # The target file's parent dir (newdir/) does NOT exist yet.
   local ev out
   ev="$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s/newdir/x.txt"}}' "$repo")"
@@ -205,7 +209,7 @@ test_wtnew_links_without_claude_dir() {
   printf '{"worktreeDir":"%s/trees/{branch}","worktreeLink":[".env"]}' "$sb" \
     > "$sb/home/.claude/worktree-config.json"
   local wt="$sb/trees/feat-x"
-  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
+  ( cd "$repo" && HOME="$sb/home" bash "$ROOT/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main ) >/dev/null 2>&1
   if [ -L "$wt/.env" ]; then
     local target; target="$(readlink "$wt/.env")"
     if [ "$target" = "$repo/.env" ]; then
@@ -234,7 +238,7 @@ test_wtnew_invalid_link_fails_loud() {
   printf '{"worktreeDir":"%s/trees/{branch}","worktreeLink":["/etc/passwd"]}' "$sb" \
     > "$sb/home/.claude/worktree-config.json"
   assert_fails "wt-new fails on invalid worktreeLink config" bash -c \
-    'cd "'"$repo"'" && HOME="'"$sb/home"'" bash "'"$ROOT"'/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null'
+    'cd "'"$repo"'" && HOME="'"$sb/home"'" bash "'"$ROOT"'/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>/dev/null'
   [ ! -d "$sb/trees/feat-x" ] && printf 'PASS: %s\n' "wt-new did not create worktree dir on invalid link config" \
     || { printf 'FAIL: worktree dir was created despite invalid link config\n'; FAILED=1; }
   rm -rf "$sb"
@@ -262,7 +266,7 @@ test_wtnew_emits_postcreate_to_stderr() {
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '{"worktreeDir":"%s/trees/{branch}","postCreate":"npm install"}' "$sb" > "$repo/.claude/worktree-config.json"
   local out err
-  out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/tss-git-skills/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>"$sb/err" )"
+  out="$( cd "$repo" && HOME="$sb/home" bash "$ROOT/skills/create-and-enter-worktree/scripts/wt-new.sh" feat/x main 2>"$sb/err" )"
   err="$(cat "$sb/err")"
   assert_eq "$out" "$sb/trees/feat-x" "stdout is exactly the path (no postCreate leak)"
   case "$err" in *"postCreate: npm install"*) printf 'PASS: %s\n' "postCreate note on stderr" ;; *) printf 'FAIL: postCreate note missing from stderr\n'; FAILED=1 ;; esac
@@ -275,7 +279,7 @@ _cfg_repo() { # echo a fresh temp repo path with git initialised
       && git commit -q --allow-empty -m init && git branch -M main ) >/dev/null 2>&1
   printf '%s' "$sb/repo"
 }
-CFG="$ROOT/tss-git-skills/skills/configure-worktree/scripts/configure-worktree.sh"
+CFG="$ROOT/skills/configure-worktree/scripts/configure-worktree.sh"
 
 test_configure_committed_writes_and_stages() {
   local sb; sb="$(mktemp -d)"; local repo; repo="$(_cfg_repo "$sb")"
@@ -345,14 +349,14 @@ test_branchnaming_local_overrides_committed() {
   rm -rf "$sb"
 }
 
-WTE="$ROOT/tss-git-skills/skills/worktree-enforce/scripts/worktree-enforce.sh"
+WTE="$ROOT/skills/worktree-enforce/scripts/worktree-enforce.sh"
 
 # A sandbox HOME fully wired for worktree-discipline (hook copied + registered +
 # CLAUDE.md rule), and a repo opted in. Echoes "$sb".
 _doctor_wired_sandbox() {
   local sb; sb="$(mktemp -d)"
   mkdir -p "$sb/home/.claude/hooks"
-  cp "$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
+  cp "$ROOT/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
   chmod +x "$sb/home/.claude/hooks/worktree-discipline.sh"
   printf '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit|NotebookEdit|Bash","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}}' > "$sb/home/.claude/settings.json"
   printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
@@ -391,13 +395,13 @@ test_doctor_detects_stale_hook() {
 }
 
 # ---- teardown script ----
-TD="$ROOT/tss-git-skills/skills/teardown-worktree-discipline/scripts/teardown-worktree-discipline.sh"
+TD="$ROOT/skills/teardown-worktree-discipline/scripts/teardown-worktree-discipline.sh"
 
 # Sandbox with everything wired: settings.json, hook file, CLAUDE.md rule.
 _wired_teardown_sandbox() {
   local sb; sb="$(mktemp -d)"
   mkdir -p "$sb/home/.claude/hooks"
-  cp "$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
+  cp "$ROOT/skills/setup-worktree-discipline/worktree-discipline.sh" "$sb/home/.claude/hooks/worktree-discipline.sh"
   printf '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit|NotebookEdit|Bash","hooks":[{"type":"command","command":"bash $HOME/.claude/hooks/worktree-discipline.sh"}]}]}}' > "$sb/home/.claude/settings.json"
   printf '## Worktree discipline\n\nrule\n' > "$sb/home/.claude/CLAUDE.md"
   printf '%s' "$sb"
@@ -512,7 +516,7 @@ test_teardown_handles_malformed_settings() {
 }
 
 # ---- hook Bash command detection ----
-HOOK="$ROOT/tss-git-skills/skills/setup-worktree-discipline/worktree-discipline.sh"
+HOOK="$ROOT/skills/setup-worktree-discipline/worktree-discipline.sh"
 mkdir -p "$ROOT/tests/.sandboxes"
 
 # Pipe a Bash tool event through the hook from inside a sandbox repo.
@@ -795,7 +799,7 @@ test_enforce_in_does_not_clear_local_enable_override() {
 }
 
 # ---- configure-worktree status ----
-CFG_STATUS="$ROOT/tss-git-skills/skills/configure-worktree/scripts/configure-worktree.sh"
+CFG_STATUS="$ROOT/skills/configure-worktree/scripts/configure-worktree.sh"
 
 _cfgstatus_repo() {
   local sb="$1"
