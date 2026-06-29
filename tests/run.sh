@@ -16,6 +16,7 @@ RS_ROOT="$ROOT/tss-review-skills"
 MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
 SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
 RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
+MERGE="$RS_ROOT/skills/review-changes/scripts/merge-findings.sh"
 
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
@@ -923,6 +924,49 @@ test_rubric_lists_all_dimensions() {
     grep -q "\`$k\`" "$RUBRIC" || { printf 'FAIL: rubric missing dimension %s\n' "$k"; rc=1; }
   done
   [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "rubric documents all 10 dimensions" || FAILED=1
+}
+
+test_merge_dedup_unions_raised_by() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "1" "duplicate findings collapse to one"
+  assert_eq "$(jq -r '.[0].raised_by | sort | join(",")' "$d/ledger.json")" "kimi,opus" "raised_by unions reviewers"
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "merged finding starts open"
+  rm -rf "$d"
+}
+
+test_merge_keeps_distinct() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"security","severity":"low","file":"a.sh","line":10,"title":"y","detail":"d"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "distinct dimensions stay separate"
+  rm -rf "$d"
+}
+
+test_merge_round_arg() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 3 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].round' "$d/ledger.json")" "3" "merge stamps the round"
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_malformed() {
+  local d; d="$(mktemp -d)"
+  printf '%s' 'not json' > "$d/findings.opus.json"
+  assert_fails "merge aborts on malformed input" bash "$MERGE" "$d"
+  if [ ! -f "$d/ledger.json" ]; then printf 'PASS: %s\n' "no ledger written on abort"
+  else printf 'FAIL: ledger written despite malformed input\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_empty() {
+  local d; d="$(mktemp -d)"
+  assert_fails "merge aborts when no findings files" bash "$MERGE" "$d"
+  rm -rf "$d"
 }
 
 # Run every test_* function.
