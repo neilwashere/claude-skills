@@ -17,6 +17,7 @@ MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
 SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
 RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
 MERGE="$RS_ROOT/skills/review-changes/scripts/merge-findings.sh"
+POST="$RS_ROOT/skills/review-changes/scripts/post-to-pr.sh"
 
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
@@ -966,6 +967,36 @@ test_merge_aborts_on_malformed() {
 test_merge_aborts_on_empty() {
   local d; d="$(mktemp -d)"
   assert_fails "merge aborts when no findings files" bash "$MERGE" "$d"
+  rm -rf "$d"
+}
+
+test_post_payload_shape() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"error-handling","severity":"high","file":"x.sh","line":5,"title":"jq truncates","detail":"write temp then mv"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" deadbeef)"
+  assert_eq "$(echo "$out" | jq -r '.commit_id')" "deadbeef" "payload carries commit_id"
+  assert_eq "$(echo "$out" | jq -r '.event')" "COMMENT" "payload event is COMMENT"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].path')" "x.sh" "comment path from finding.file"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].side')" "RIGHT" "comment side defaults RIGHT"
+  if echo "$out" | jq -r '.comments[0].body' | grep -q '🔴 HIGH — jq truncates'; then
+    printf 'PASS: %s\n' "body renders severity + title"
+  else printf 'FAIL: body missing severity/title\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_post_renders_suggestion() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"y.sh","line":2,"title":"t","detail":"d","suggestion":"do X"}]' > "$d/ledger.json"
+  bash "$POST" --dry-run "$d/ledger.json" abc123 | jq -r '.comments[0].body' | grep -q 'Suggested:\* do X' \
+    && printf 'PASS: %s\n' "body renders suggestion when present" \
+    || { printf 'FAIL: suggestion not rendered\n'; FAILED=1; }
+  rm -rf "$d"
+}
+
+test_post_aborts_on_bad_ledger() {
+  local d; d="$(mktemp -d)"
+  printf '%s' 'nope' > "$d/ledger.json"
+  assert_fails "post aborts on malformed ledger" bash "$POST" --dry-run "$d/ledger.json" deadbeef
   rm -rf "$d"
 }
 
