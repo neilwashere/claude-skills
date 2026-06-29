@@ -1,4 +1,4 @@
-This repo is a Claude Code **marketplace** hosting a single plugin, `tss-git-skills`, whose skills invoke as `tss-git-skills:<skill-name>`. The plugin lives in its own subtree `./tss-git-skills/` with a flat `skills/` and its own `README.md`; the repo root holds only the marketplace manifest.
+This repo is a Claude Code **marketplace** hosting two plugins: `tss-git-skills` (git/worktree workflow skills, invoking as `tss-git-skills:<skill-name>`) and `tss-review-skills` (review → learning corpus skills, invoking as `tss-review-skills:<skill-name>`). Each plugin lives in its own subtree (`./tss-git-skills/`, `./tss-review-skills/`) with a flat `skills/` and its own `README.md`; the repo root holds only the marketplace manifest.
 
 Why the subtree / flat `skills/`: Claude Code auto-scans a plugin's `skills/` at depth-1, so a flat `skills/` is auto-discovered and `tss-git-skills/.claude-plugin/plugin.json` needs no `skills` array (and no `hooks`/`commands` keys unless it ships plugin-level ones).
 

@@ -12,6 +12,9 @@ LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
 # shellcheck source=/dev/null
 source "$LIB"
 
+RS_ROOT="$ROOT/tss-review-skills"
+MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
+
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
   if [ "$1" = "$2" ]; then printf 'PASS: %s\n' "$3"
@@ -881,6 +884,24 @@ test_cfgstatus_branchNaming_non_object() {
     && printf 'PASS: %s\n' "cfg-status shows <error> for bad branchNaming" \
     || { printf 'FAIL: cfg-status did not handle bad branchNaming\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
+}
+
+test_marketplace_lists_review_plugin() {
+  jq empty "$MARKETPLACE" 2>/dev/null \
+    && printf 'PASS: %s\n' "marketplace.json is valid JSON" \
+    || { printf 'FAIL: marketplace.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq -r '[.plugins[].name] | index("tss-review-skills") | type' "$MARKETPLACE")" "number" \
+    "marketplace lists tss-review-skills"
+  assert_eq "$(jq -r '.plugins[] | select(.name=="tss-review-skills") | .source' "$MARKETPLACE")" \
+    "./tss-review-skills" "review plugin source path"
+}
+
+test_review_plugin_manifest_valid() {
+  jq empty "$RS_ROOT/.claude-plugin/plugin.json" 2>/dev/null \
+    && printf 'PASS: %s\n' "review plugin.json is valid JSON" \
+    || { printf 'FAIL: review plugin.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq -r '.name' "$RS_ROOT/.claude-plugin/plugin.json")" "tss-review-skills" \
+    "plugin.json name"
 }
 
 # Run every test_* function.

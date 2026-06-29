@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "neilwashere",
-  "description": "Curated git/worktree workflow skills for Claude Code.",
+  "description": "Curated git/worktree and review workflow skills for Claude Code.",
   "owner": {
     "name": "Neil Chambers",
     "email": "neil@threadsafe.systems"
@@ -11,6 +11,12 @@
       "name": "tss-git-skills",
       "description": "Curated git/worktree workflow skills, namespaced as tss-git-skills:<skill>.",
       "source": "./tss-git-skills",
+      "category": "development"
+    },
+    {
+      "name": "tss-review-skills",
+      "description": "Multi-model review → learning corpus, namespaced as tss-review-skills:<skill>.",
+      "source": "./tss-review-skills",
       "category": "development"
     }
   ]

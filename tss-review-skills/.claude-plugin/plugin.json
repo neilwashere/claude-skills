@@ -1,0 +1,7 @@
+{
+  "name": "tss-review-skills",
+  "description": "Multi-model PR/diff review that produces a learning corpus — dispatch a reviewer panel into a canonical findings ledger, then synthesise anonymised lessons. Namespaced as tss-review-skills:<skill>.",
+  "author": {
+    "name": "Neil Chambers"
+  }
+}
