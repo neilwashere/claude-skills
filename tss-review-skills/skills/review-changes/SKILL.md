@@ -151,9 +151,11 @@ existing ledger using the following policy:
 - **Re-flagged finding** (tuple in prior ledger AND flagged again this round):
   preserves the prior `id` and `round` (first appearance); `raised_by` is
   unioned; displayed fields (severity/title/detail/suggestion) come from
-  whichever of {prior, current} has the higher severity; `status` is kept
-  `wontfix` if the prior was `wontfix` (the driver's explicit decision stands),
-  otherwise reset to `open` (a reviewer still flags it).
+  whichever of {prior, current} has the higher severity; `status` is preserved
+  when the prior was `wontfix` or `disputed` (terminal driver decisions stand),
+  otherwise the finding reopens to `open` and its `resolution` is cleared to
+  `null`. `wontfix` and `disputed` do not block convergence — they are explicit
+  driver decisions and the loop treats them as settled.
 - **Unflagged finding** (tuple in prior ledger, not flagged this round):
   kept verbatim — preserves the driver's `status`, `resolution`, and `round`.
 - **New finding** (not in prior ledger): added as `status: "open"` at round N+1
@@ -308,16 +310,23 @@ Always preview with `--dry-run` before posting to a live PR.
 
 ## v1 dedup note
 
-`merge-findings.sh` deduplicates on the exact triple `(dimension, file, line)`. Two
-findings from different reviewers collide when all three values match; their reviewer
-labels are unioned into `raised_by` and the finding passes through once.
+`merge-findings.sh` deduplicates on the key `(dimension, file, line, side)`. Two
+findings collide when all four values match; their reviewer labels are unioned into
+`raised_by` and the max-severity member's fields win.
 
-Findings that share `dimension` and `file` but differ on `line` (even by one) are
-kept as separate entries. Title-similarity tie-breaking is not implemented in v1 —
-findings at overlapping but non-identical line ranges are both retained. If a
-reviewer raises a multi-line finding (`line`–`end_line`) and another raises a
-point finding at a line within that range, they will not be deduped in v1.
+Two additional rules handle edge cases:
+
+- **Null `line` stays distinct from 0.** A file-level (unanchored) finding with
+  `line: null` never merges with a line-0 finding. Null is preserved in the key
+  as-is — it is not coalesced.
+- **Null-line findings are disambiguated by `title`.** When two findings share the
+  same `dimension`, `file`, null `line`, and `side`, they are further keyed by
+  `title`. Findings with different titles stay as separate entries; findings with
+  identical titles merge and union `raised_by`.
+- **`LEFT` vs `RIGHT` findings at the same line are kept separate.** `side` is
+  part of the dedup key, so a comment on the old side of a diff line and one on
+  the new side are never merged.
 
 This keeps the merge logic simple and auditable. Cross-family agreement
 (`raised_by` length ≥ 2) is the most reliable convergence signal and works
-correctly under v1 dedup semantics.
+correctly under these dedup semantics.
