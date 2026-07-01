@@ -154,7 +154,7 @@ Write **exactly one file** to the run directory:
 [RUN_DIR]/findings.[REVIEWER_LABEL].json
 ```
 
-The file must be a JSON array conforming to `./ledger-schema.json`. Each element
+The file must be a JSON array of findings conforming to `./ledger-schema.json#/$defs/reviewerFinding`. Each element
 is one finding. An empty array `[]` is valid and means no issues were found.
 
 **Do not write any other files.** Reviewers run in parallel and share the

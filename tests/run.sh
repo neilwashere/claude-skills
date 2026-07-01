@@ -921,6 +921,8 @@ test_ledger_schema_valid() {
     "schema enumerates 10 dimensions"
   assert_eq "$(jq -r '.["$defs"].finding.properties.severity.enum | sort | join(",")' "$SCHEMA")" \
     "high,low,medium" "schema severity enum"
+  assert_eq "$(jq '.["$defs"].reviewerFinding.additionalProperties' "$SCHEMA")" "false" "reviewerFinding is closed"
+  assert_eq "$(jq -r '.["$defs"].reviewerFinding.properties | has("id")' "$SCHEMA")" "false" "reviewerFinding omits driver field id"
 }
 
 test_rubric_lists_all_dimensions() {
@@ -1153,6 +1155,82 @@ test_merge_addressed_reopens_on_reflag() {
   bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
   assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "addressed finding reopens when re-flagged"
   assert_eq "$(jq -r '.[0].round' "$d/ledger.json")" "1" "reopened finding keeps first-appearance round"
+  rm -rf "$d"
+}
+
+test_merge_round_rejects_non_integer() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"
+  assert_fails "merge rejects --round 1.5" bash "$MERGE" "$d" --round 1.5
+  assert_fails "merge rejects --round abc" bash "$MERGE" "$d" --round abc
+  rm -rf "$d"
+}
+
+test_merge_validates_element_shape() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A"}]' > "$d/findings.opus.json"  # missing detail
+  assert_fails "merge rejects element missing a required field" bash "$MERGE" "$d"
+  if [ ! -f "$d/ledger.json" ]; then printf 'PASS: %s\n' "no ledger written on bad element"; else printf 'FAIL: ledger written despite bad element\n'; FAILED=1; fi
+  printf '%s' '[{"dimension":"bogus","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"  # bad dimension
+  assert_fails "merge rejects invalid dimension" bash "$MERGE" "$d"
+  rm -rf "$d"
+}
+
+test_merge_dedup_respects_side() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"side":"LEFT","title":"L","detail":"dl"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"side":"RIGHT","title":"R","detail":"dr"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "LEFT and RIGHT findings at same line stay distinct"
+  rm -rf "$d"
+}
+
+test_merge_null_line_findings_distinct() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"one","detail":"d1"},{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"two","detail":"d2"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "distinct null-line findings do not collapse"
+  # identical null-line finding from a second reviewer DOES merge
+  printf '%s' '[{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"one","detail":"d1"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r '[.[]|select(.title=="one")]|length' "$d/ledger.json")" "1" "identical null-line findings merge"
+  assert_eq "$(jq -r '.[]|select(.title=="one")|.raised_by|sort|join(",")' "$d/ledger.json")" "kimi,opus" "merged null-line unions reviewers"
+  rm -rf "$d"
+}
+
+test_merge_reopen_clears_resolution() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="addressed"|.resolution="fixed in abc")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "re-flagged addressed finding reopens"
+  assert_eq "$(jq -r '.[0].resolution' "$d/ledger.json")" "null" "reopening clears stale resolution"
+  rm -rf "$d"
+}
+
+test_merge_disputed_preserved_on_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="disputed"|.resolution="contested")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "disputed" "disputed survives re-flag"
+  rm -rf "$d"
+}
+
+test_merge_new_id_no_collision_on_reround() {
+  local d; d="$(mktemp -d)"
+  # Round 2 seeds ledger with r2-1 (a security finding), then a re-merge adds a NEW finding.
+  printf '%s' '[{"dimension":"security","severity":"high","file":"a.sh","line":1,"title":"S","detail":"ds"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  local first; first="$(jq -r '.[0].id' "$d/ledger.json")"    # expect r2-1
+  # Re-run round 2 with the original finding PLUS a new one; the new id must not collide with r2-1.
+  printf '%s' '[{"dimension":"security","severity":"high","file":"a.sh","line":1,"title":"S","detail":"ds"},{"dimension":"logic","severity":"low","file":"b.sh","line":2,"title":"L","detail":"dl"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '[.[].id]|length' "$d/ledger.json")" "2" "two findings after re-merge"
+  assert_eq "$(jq -r '[.[].id]|unique|length' "$d/ledger.json")" "2" "ids are unique (no collision on re-round)"
+  assert_eq "$(jq -r '.[]|select(.file=="a.sh")|.id' "$d/ledger.json")" "$first" "untouched finding keeps its id"
   rm -rf "$d"
 }
 
