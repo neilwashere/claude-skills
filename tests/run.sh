@@ -12,6 +12,18 @@ LIB="$ROOT/tss-git-skills/lib/worktree-config.sh"
 # shellcheck source=/dev/null
 source "$LIB"
 
+RS_ROOT="$ROOT/tss-review-skills"
+CHECK_INDEX="$RS_ROOT/skills/synthesize-review-learnings/scripts/check-index.sh"
+LESSONS="$ROOT/docs/contributing/lessons"
+MARKETPLACE="$ROOT/.claude-plugin/marketplace.json"
+SCHEMA="$RS_ROOT/skills/review-changes/references/ledger-schema.json"
+RUBRIC="$RS_ROOT/skills/review-changes/references/rubric.md"
+MERGE="$RS_ROOT/skills/review-changes/scripts/merge-findings.sh"
+POST="$RS_ROOT/skills/review-changes/scripts/post-to-pr.sh"
+RC_SKILL="$RS_ROOT/skills/review-changes/SKILL.md"
+CHARTER="$RS_ROOT/skills/review-changes/references/reviewer-charter.md"
+SY_SKILL="$RS_ROOT/skills/synthesize-review-learnings/SKILL.md"
+
 FAILED=0
 assert_eq() { # <actual> <expected> <msg>
   if [ "$1" = "$2" ]; then printf 'PASS: %s\n' "$3"
@@ -881,6 +893,397 @@ test_cfgstatus_branchNaming_non_object() {
     && printf 'PASS: %s\n' "cfg-status shows <error> for bad branchNaming" \
     || { printf 'FAIL: cfg-status did not handle bad branchNaming\n%s\n' "$out"; FAILED=1; }
   rm -rf "$sb"
+}
+
+test_marketplace_lists_review_plugin() {
+  jq empty "$MARKETPLACE" 2>/dev/null \
+    && printf 'PASS: %s\n' "marketplace.json is valid JSON" \
+    || { printf 'FAIL: marketplace.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq -r '[.plugins[].name] | index("tss-review-skills") | type' "$MARKETPLACE")" "number" \
+    "marketplace lists tss-review-skills"
+  assert_eq "$(jq -r '.plugins[] | select(.name=="tss-review-skills") | .source' "$MARKETPLACE")" \
+    "./tss-review-skills" "review plugin source path"
+}
+
+test_review_plugin_manifest_valid() {
+  jq empty "$RS_ROOT/.claude-plugin/plugin.json" 2>/dev/null \
+    && printf 'PASS: %s\n' "review plugin.json is valid JSON" \
+    || { printf 'FAIL: review plugin.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq -r '.name' "$RS_ROOT/.claude-plugin/plugin.json")" "tss-review-skills" \
+    "plugin.json name"
+}
+
+test_ledger_schema_valid() {
+  jq empty "$SCHEMA" 2>/dev/null \
+    && printf 'PASS: %s\n' "ledger-schema.json is valid JSON" \
+    || { printf 'FAIL: ledger-schema.json invalid JSON\n'; FAILED=1; }
+  assert_eq "$(jq '.["$defs"].finding.properties.dimension.enum | length' "$SCHEMA")" "10" \
+    "schema enumerates 10 dimensions"
+  assert_eq "$(jq -r '.["$defs"].finding.properties.severity.enum | sort | join(",")' "$SCHEMA")" \
+    "high,low,medium" "schema severity enum"
+  assert_eq "$(jq '.["$defs"].reviewerFinding.additionalProperties' "$SCHEMA")" "false" "reviewerFinding is closed"
+  assert_eq "$(jq -r '.["$defs"].reviewerFinding.properties | has("id")' "$SCHEMA")" "false" "reviewerFinding omits driver field id"
+}
+
+test_rubric_lists_all_dimensions() {
+  local k rc=0
+  for k in logic error-handling testing architecture abstractions conciseness \
+           maintainability documentation security conventions; do
+    grep -q "\`$k\`" "$RUBRIC" || { printf 'FAIL: rubric missing dimension %s\n' "$k"; rc=1; }
+  done
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "rubric documents all 10 dimensions" || FAILED=1
+}
+
+test_merge_dedup_unions_raised_by() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "1" "duplicate findings collapse to one"
+  assert_eq "$(jq -r '.[0].raised_by | sort | join(",")' "$d/ledger.json")" "kimi,opus" "raised_by unions reviewers"
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "merged finding starts open"
+  rm -rf "$d"
+}
+
+test_merge_keeps_distinct() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"security","severity":"low","file":"a.sh","line":10,"title":"y","detail":"d"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "distinct dimensions stay separate"
+  rm -rf "$d"
+}
+
+test_merge_round_arg() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"x","detail":"d"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 3 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].round' "$d/ledger.json")" "3" "merge stamps the round"
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_malformed() {
+  local d; d="$(mktemp -d)"
+  printf '%s' 'not json' > "$d/findings.opus.json"
+  assert_fails "merge aborts on malformed input" bash "$MERGE" "$d"
+  if [ ! -f "$d/ledger.json" ]; then printf 'PASS: %s\n' "no ledger written on abort"
+  else printf 'FAIL: ledger written despite malformed input\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_empty() {
+  local d; d="$(mktemp -d)"
+  assert_fails "merge aborts when no findings files" bash "$MERGE" "$d"
+  rm -rf "$d"
+}
+
+test_post_payload_shape() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"error-handling","severity":"high","file":"x.sh","line":5,"title":"jq truncates","detail":"write temp then mv"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" deadbeef)"
+  assert_eq "$(echo "$out" | jq -r '.commit_id')" "deadbeef" "payload carries commit_id"
+  assert_eq "$(echo "$out" | jq -r '.event')" "COMMENT" "payload event is COMMENT"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].path')" "x.sh" "comment path from finding.file"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].side')" "RIGHT" "comment side defaults RIGHT"
+  if echo "$out" | jq -r '.comments[0].body' | grep -q '🔴 HIGH — jq truncates'; then
+    printf 'PASS: %s\n' "body renders severity + title"
+  else printf 'FAIL: body missing severity/title\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_post_renders_suggestion() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"y.sh","line":2,"title":"t","detail":"d","suggestion":"do X"}]' > "$d/ledger.json"
+  bash "$POST" --dry-run "$d/ledger.json" abc123 | jq -r '.comments[0].body' | grep -q 'Suggested:\* do X' \
+    && printf 'PASS: %s\n' "body renders suggestion when present" \
+    || { printf 'FAIL: suggestion not rendered\n'; FAILED=1; }
+  rm -rf "$d"
+}
+
+test_post_aborts_on_bad_ledger() {
+  local d; d="$(mktemp -d)"
+  printf '%s' 'nope' > "$d/ledger.json"
+  assert_fails "post aborts on malformed ledger" bash "$POST" --dry-run "$d/ledger.json" deadbeef
+  rm -rf "$d"
+}
+
+test_review_changes_skill_frontmatter() {
+  head -8 "$RC_SKILL" | grep -q '^name: review-changes' \
+    && printf 'PASS: %s\n' "review-changes SKILL has name" \
+    || { printf 'FAIL: review-changes SKILL name\n'; FAILED=1; }
+  # model-invokable: must NOT disable model invocation
+  if head -8 "$RC_SKILL" | grep -q '^disable-model-invocation: true'; then
+    printf 'FAIL: review-changes must be model-invokable\n'; FAILED=1
+  else printf 'PASS: %s\n' "review-changes is model-invokable"; fi
+}
+
+test_review_changes_charter_has_guardrails() {
+  local rc=0
+  grep -qi 'read-only' "$CHARTER" || { printf 'FAIL: charter missing read-only discipline\n'; rc=1; }
+  grep -qi 'recurrence\|previously-taught\|lessons' "$CHARTER" || { printf 'FAIL: charter missing recurrence check\n'; rc=1; }
+  grep -q 'findings\.' "$CHARTER" || { printf 'FAIL: charter missing output-file contract\n'; rc=1; }
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "charter carries the load-bearing guardrails" || FAILED=1
+}
+
+test_check_index_catches_unlisted_lesson() {
+  local d; d="$(mktemp -d)"
+  # Positive control: a well-formed dir (all required keys, lesson linked) must exit 0.
+  local good; good="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$good/logic-good.md"
+  printf '# Lessons index\n\n- [t](logic-good.md)\n' > "$good/INDEX.md"
+  bash "$CHECK_INDEX" "$good" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "check-index exits 0 on well-formed dir (positive control)" \
+    || { printf 'FAIL: check-index non-zero on well-formed dir (positive control)\n'; FAILED=1; }
+  rm -rf "$good"
+  # Negative: orphan lesson has ALL frontmatter keys, so it can only fail on linkage.
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$d/logic-orphan.md"
+  printf '# Lessons index\n' > "$d/INDEX.md"   # lesson present but not linked
+  local out rc2
+  out="$(bash "$CHECK_INDEX" "$d" 2>&1)"; rc2=$?
+  assert_eq "$rc2" "1" "check-index fails on an unlisted lesson"
+  if echo "$out" | grep -q "linked from INDEX.md exactly once"; then
+    printf 'PASS: %s\n' "fails specifically on the linkage check (falsifiable)"
+  else
+    printf 'FAIL: did not fail on the linkage path specifically\n%s\n' "$out"; FAILED=1
+  fi
+  rm -rf "$d"
+}
+
+test_check_index_catches_missing_frontmatter_key() {
+  local d; d="$(mktemp -d)"
+  # Positive control: a well-formed dir (all required keys, lesson linked) must exit 0.
+  local good; good="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$good/logic-good.md"
+  printf '# Lessons index\n\n- [t](logic-good.md)\n' > "$good/INDEX.md"
+  bash "$CHECK_INDEX" "$good" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "check-index exits 0 on well-formed dir (positive control)" \
+    || { printf 'FAIL: check-index non-zero on well-formed dir (positive control)\n'; FAILED=1; }
+  rm -rf "$good"
+  # Negative: lesson linked but with missing frontmatter keys.
+  printf -- '---\ntitle: t\ndimension: logic\n---\nbody\n' > "$d/logic-thin.md"   # missing keys
+  printf '# Lessons index\n\n- [t](logic-thin.md)\n' > "$d/INDEX.md"
+  assert_fails "check-index flags missing frontmatter keys" bash "$CHECK_INDEX" "$d"
+  rm -rf "$d"
+}
+
+test_check_index_catches_duplicate_row() {
+  local d; d="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$d/logic-dup.md"
+  printf '# Lessons index\n\n- [t](logic-dup.md)\n- [t again](logic-dup.md)\n' > "$d/INDEX.md"
+  assert_fails "check-index flags a lesson linked more than once" bash "$CHECK_INDEX" "$d"
+  rm -rf "$d"
+}
+
+test_seed_lessons_pass_integrity() {
+  bash "$CHECK_INDEX" "$LESSONS" >/dev/null 2>&1 \
+    && printf 'PASS: %s\n' "shipped lessons/ pass index integrity" \
+    || { printf 'FAIL: shipped lessons/ fail index integrity\n'; FAILED=1; }
+}
+
+test_essay_retired() {
+  if [ -f "$ROOT/docs/contributing/closing-the-verification-loop.md" ]; then
+    printf 'FAIL: retired essay still present\n'; FAILED=1
+  else printf 'PASS: %s\n' "verification essay retired"; fi
+}
+
+test_readme_points_at_lessons() {
+  grep -q 'docs/contributing/lessons' "$ROOT/README.md" \
+    && printf 'PASS: %s\n' "README links the lessons index" \
+    || { printf 'FAIL: README does not link lessons index\n'; FAILED=1; }
+}
+
+test_synthesize_skill_is_user_invoked() {
+  head -8 "$SY_SKILL" | grep -q '^name: synthesize-review-learnings' \
+    && printf 'PASS: %s\n' "synthesize SKILL has name" \
+    || { printf 'FAIL: synthesize SKILL name\n'; FAILED=1; }
+  head -8 "$SY_SKILL" | grep -q '^disable-model-invocation: true' \
+    && printf 'PASS: %s\n' "synthesize is user-invoked" \
+    || { printf 'FAIL: synthesize must set disable-model-invocation: true\n'; FAILED=1; }
+}
+
+test_synthesize_skill_covers_pipeline() {
+  local rc=0
+  grep -qi 'teachability\|severity.*MEDIUM\|multi-model\|recurr' "$SY_SKILL" || { printf 'FAIL: missing teachability filter\n'; rc=1; }
+  grep -qi 'strengthen\|occurrences\|dedup' "$SY_SKILL" || { printf 'FAIL: missing dedup/strengthen step\n'; rc=1; }
+  grep -q 'check-index.sh' "$SY_SKILL" || { printf 'FAIL: missing index-integrity check\n'; rc=1; }
+  grep -qi 'no model names\|anonymis\|anonymiz' "$SY_SKILL" || { printf 'FAIL: missing anonymisation rule\n'; rc=1; }
+  [ "$rc" -eq 0 ] && printf 'PASS: %s\n' "synthesize SKILL covers the pipeline" || FAILED=1
+}
+
+test_merge_max_severity_survivor() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":10,"title":"kimi-low","detail":"dk"}]' > "$d/findings.kimi.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"opus-high","detail":"do"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "1" "same tuple collapses"
+  assert_eq "$(jq -r '.[0].severity' "$d/ledger.json")" "high" "merged finding keeps MAX severity"
+  assert_eq "$(jq -r '.[0].title' "$d/ledger.json")" "opus-high" "merged finding keeps max-severity member fields"
+  assert_eq "$(jq -r '.[0].raised_by | sort | join(",")' "$d/ledger.json")" "kimi,opus" "raised_by still unions"
+  rm -rf "$d"
+}
+
+test_merge_round_aware_reconciles() {
+  local d; d="$(mktemp -d)"
+  # Round 1: A (logic,a.sh,10) + B (security,b.sh,5)
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"},{"dimension":"security","severity":"medium","file":"b.sh","line":5,"title":"B","detail":"db"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  local aid; aid="$(jq -r '.[] | select(.file=="a.sh") | .id' "$d/ledger.json")"
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .round' "$d/ledger.json")" "1" "round-1 finding stamped round 1"
+  # Driver addresses B in place
+  printf '%s' "$(jq 'map(if .file=="b.sh" then .status="addressed" | .resolution="fixed B" else . end)' "$d/ledger.json")" > "$d/ledger.json"
+  # Round 2: re-flag A only, plus NEW finding C
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"},{"dimension":"testing","severity":"low","file":"c.sh","line":1,"title":"C","detail":"dc"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .round' "$d/ledger.json")" "1" "re-flagged finding keeps first-appearance round"
+  assert_eq "$(jq -r '.[] | select(.file=="a.sh") | .id' "$d/ledger.json")" "$aid" "re-flagged finding keeps its id"
+  assert_eq "$(jq -r '.[] | select(.file=="b.sh") | .status' "$d/ledger.json")" "addressed" "unflagged addressed finding preserved"
+  assert_eq "$(jq -r '.[] | select(.file=="b.sh") | .resolution' "$d/ledger.json")" "fixed B" "unflagged finding keeps resolution"
+  assert_eq "$(jq -r '.[] | select(.file=="c.sh") | .round' "$d/ledger.json")" "2" "new finding stamped round 2"
+  assert_eq "$(jq -r '.[] | select(.file=="c.sh") | .status' "$d/ledger.json")" "open" "new finding open"
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "3" "ledger reconciles to 3 findings"
+  rm -rf "$d"
+}
+
+test_merge_wontfix_survives_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="wontfix" | .resolution="by design")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "wontfix" "wontfix survives re-flag"
+  rm -rf "$d"
+}
+
+test_merge_aborts_on_malformed_prior_ledger() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"
+  printf '%s' 'not json' > "$d/ledger.json"           # malformed prior ledger
+  assert_fails "merge aborts on malformed prior ledger" bash "$MERGE" "$d" --round 2
+  rm -rf "$d"
+}
+
+test_merge_addressed_reopens_on_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="addressed" | .resolution="tried")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "addressed finding reopens when re-flagged"
+  assert_eq "$(jq -r '.[0].round' "$d/ledger.json")" "1" "reopened finding keeps first-appearance round"
+  rm -rf "$d"
+}
+
+test_merge_round_rejects_non_integer() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"low","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"
+  assert_fails "merge rejects --round 1.5" bash "$MERGE" "$d" --round 1.5
+  assert_fails "merge rejects --round abc" bash "$MERGE" "$d" --round abc
+  rm -rf "$d"
+}
+
+test_merge_validates_element_shape() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A"}]' > "$d/findings.opus.json"  # missing detail
+  assert_fails "merge rejects element missing a required field" bash "$MERGE" "$d"
+  if [ ! -f "$d/ledger.json" ]; then printf 'PASS: %s\n' "no ledger written on bad element"; else printf 'FAIL: ledger written despite bad element\n'; FAILED=1; fi
+  printf '%s' '[{"dimension":"bogus","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d"}]' > "$d/findings.opus.json"  # bad dimension
+  assert_fails "merge rejects invalid dimension" bash "$MERGE" "$d"
+  rm -rf "$d"
+}
+
+test_merge_dedup_respects_side() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"side":"LEFT","title":"L","detail":"dl"}]' > "$d/findings.opus.json"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"side":"RIGHT","title":"R","detail":"dr"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "LEFT and RIGHT findings at same line stay distinct"
+  rm -rf "$d"
+}
+
+test_merge_null_line_findings_distinct() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"one","detail":"d1"},{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"two","detail":"d2"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r 'length' "$d/ledger.json")" "2" "distinct null-line findings do not collapse"
+  # identical null-line finding from a second reviewer DOES merge
+  printf '%s' '[{"dimension":"documentation","severity":"low","file":"R.md","line":null,"title":"one","detail":"d1"}]' > "$d/findings.kimi.json"
+  bash "$MERGE" "$d" >/dev/null 2>&1
+  assert_eq "$(jq -r '[.[]|select(.title=="one")]|length' "$d/ledger.json")" "1" "identical null-line findings merge"
+  assert_eq "$(jq -r '.[]|select(.title=="one")|.raised_by|sort|join(",")' "$d/ledger.json")" "kimi,opus" "merged null-line unions reviewers"
+  rm -rf "$d"
+}
+
+test_merge_reopen_clears_resolution() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="addressed"|.resolution="fixed in abc")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "open" "re-flagged addressed finding reopens"
+  assert_eq "$(jq -r '.[0].resolution' "$d/ledger.json")" "null" "reopening clears stale resolution"
+  rm -rf "$d"
+}
+
+test_merge_disputed_preserved_on_reflag() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"medium","file":"a.sh","line":10,"title":"A","detail":"da"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 1 >/dev/null 2>&1
+  printf '%s' "$(jq 'map(.status="disputed"|.resolution="contested")' "$d/ledger.json")" > "$d/ledger.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '.[0].status' "$d/ledger.json")" "disputed" "disputed survives re-flag"
+  rm -rf "$d"
+}
+
+test_merge_new_id_no_collision_on_reround() {
+  local d; d="$(mktemp -d)"
+  # Round 2 seeds ledger with r2-1 (a security finding), then a re-merge adds a NEW finding.
+  printf '%s' '[{"dimension":"security","severity":"high","file":"a.sh","line":1,"title":"S","detail":"ds"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  local first; first="$(jq -r '.[0].id' "$d/ledger.json")"    # expect r2-1
+  # Re-run round 2 with the original finding PLUS a new one; the new id must not collide with r2-1.
+  printf '%s' '[{"dimension":"security","severity":"high","file":"a.sh","line":1,"title":"S","detail":"ds"},{"dimension":"logic","severity":"low","file":"b.sh","line":2,"title":"L","detail":"dl"}]' > "$d/findings.opus.json"
+  bash "$MERGE" "$d" --round 2 >/dev/null 2>&1
+  assert_eq "$(jq -r '[.[].id]|length' "$d/ledger.json")" "2" "two findings after re-merge"
+  assert_eq "$(jq -r '[.[].id]|unique|length' "$d/ledger.json")" "2" "ids are unique (no collision on re-round)"
+  assert_eq "$(jq -r '.[]|select(.file=="a.sh")|.id' "$d/ledger.json")" "$first" "untouched finding keeps its id"
+  rm -rf "$d"
+}
+
+test_post_only_open_findings() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"open one","detail":"d","status":"open"},{"dimension":"logic","severity":"low","file":"b.sh","line":2,"title":"done one","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "1" "only open findings become comments"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].path')" "a.sh" "the open finding is posted"
+  rm -rf "$d"
+}
+
+test_post_null_line_goes_to_body() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"documentation","severity":"medium","file":"R.md","line":null,"title":"file-level","detail":"whole-file note","status":"open"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "0" "null-line finding is not an inline comment"
+  if echo "$out" | jq -r '.body' | grep -q 'file-level'; then printf 'PASS: %s\n' "null-line finding surfaces in review body"; else printf 'FAIL: null-line finding missing from body\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_post_empty_when_nothing_open_dry() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "0" "no comments when nothing open"
+  assert_eq "$(echo "$out" | jq -r '.body')" "" "no body when nothing open"
+  rm -rf "$d"
+}
+
+test_post_live_skips_when_empty() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out rc
+  out="$(bash "$POST" "$d/ledger.json" abc owner/repo 1 2>&1)"; rc=$?
+  assert_eq "$rc" "0" "live post exits 0 when nothing to post (never calls gh)"
+  if echo "$out" | grep -q 'no open findings'; then printf 'PASS: %s\n' "live post reports nothing to post"; else printf 'FAIL: expected no-open-findings message\n%s\n' "$out"; FAILED=1; fi
+  rm -rf "$d"
 }
 
 # Run every test_* function.

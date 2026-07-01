@@ -30,9 +30,9 @@ details.
 
 ## Contributing
 
-Before opening a PR, read
-**[docs/contributing/closing-the-verification-loop.md](./docs/contributing/closing-the-verification-loop.md)**
-— a short field guide on the verification habits this repo expects: tests that
+Before opening a PR, read the
+**[contributor lessons index](./docs/contributing/lessons/INDEX.md)**
+— atomic lessons on the verification habits this repo expects: tests that
 can actually fail, behaviour that's observed rather than described, treating tool
 versions / platform / CI semantics as inputs, and designing the failure path of
-every destructive operation. It ends with a pre-flight checklist.
+every destructive operation.
