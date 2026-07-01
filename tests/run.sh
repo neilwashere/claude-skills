@@ -1234,6 +1234,43 @@ test_merge_new_id_no_collision_on_reround() {
   rm -rf "$d"
 }
 
+test_post_only_open_findings() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"open one","detail":"d","status":"open"},{"dimension":"logic","severity":"low","file":"b.sh","line":2,"title":"done one","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "1" "only open findings become comments"
+  assert_eq "$(echo "$out" | jq -r '.comments[0].path')" "a.sh" "the open finding is posted"
+  rm -rf "$d"
+}
+
+test_post_null_line_goes_to_body() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"documentation","severity":"medium","file":"R.md","line":null,"title":"file-level","detail":"whole-file note","status":"open"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "0" "null-line finding is not an inline comment"
+  if echo "$out" | jq -r '.body' | grep -q 'file-level'; then printf 'PASS: %s\n' "null-line finding surfaces in review body"; else printf 'FAIL: null-line finding missing from body\n'; FAILED=1; fi
+  rm -rf "$d"
+}
+
+test_post_empty_when_nothing_open_dry() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out; out="$(bash "$POST" --dry-run "$d/ledger.json" abc)"
+  assert_eq "$(echo "$out" | jq '.comments | length')" "0" "no comments when nothing open"
+  assert_eq "$(echo "$out" | jq -r '.body')" "" "no body when nothing open"
+  rm -rf "$d"
+}
+
+test_post_live_skips_when_empty() {
+  local d; d="$(mktemp -d)"
+  printf '%s' '[{"dimension":"logic","severity":"high","file":"a.sh","line":1,"title":"A","detail":"d","status":"addressed"}]' > "$d/ledger.json"
+  local out rc
+  out="$(bash "$POST" "$d/ledger.json" abc owner/repo 1 2>&1)"; rc=$?
+  assert_eq "$rc" "0" "live post exits 0 when nothing to post (never calls gh)"
+  if echo "$out" | grep -q 'no open findings'; then printf 'PASS: %s\n' "live post reports nothing to post"; else printf 'FAIL: expected no-open-findings message\n%s\n' "$out"; FAILED=1; fi
+  rm -rf "$d"
+}
+
 # Run every test_* function.
 for t in $(declare -F | awk '{print $3}' | grep '^test_'); do "$t"; done
 exit "$FAILED"
