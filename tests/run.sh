@@ -1035,10 +1035,17 @@ test_check_index_catches_unlisted_lesson() {
     && printf 'PASS: %s\n' "check-index exits 0 on well-formed dir (positive control)" \
     || { printf 'FAIL: check-index non-zero on well-formed dir (positive control)\n'; FAILED=1; }
   rm -rf "$good"
-  # Negative: orphan lesson not linked from INDEX.md.
-  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nstatus: active\n---\nbody\n' > "$d/logic-orphan.md"
+  # Negative: orphan lesson has ALL frontmatter keys, so it can only fail on linkage.
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$d/logic-orphan.md"
   printf '# Lessons index\n' > "$d/INDEX.md"   # lesson present but not linked
-  assert_fails "check-index flags an unlisted lesson" bash "$CHECK_INDEX" "$d"
+  local out rc2
+  out="$(bash "$CHECK_INDEX" "$d" 2>&1)"; rc2=$?
+  assert_eq "$rc2" "1" "check-index fails on an unlisted lesson"
+  if echo "$out" | grep -q "linked from INDEX.md exactly once"; then
+    printf 'PASS: %s\n' "fails specifically on the linkage check (falsifiable)"
+  else
+    printf 'FAIL: did not fail on the linkage path specifically\n%s\n' "$out"; FAILED=1
+  fi
   rm -rf "$d"
 }
 
@@ -1056,6 +1063,14 @@ test_check_index_catches_missing_frontmatter_key() {
   printf -- '---\ntitle: t\ndimension: logic\n---\nbody\n' > "$d/logic-thin.md"   # missing keys
   printf '# Lessons index\n\n- [t](logic-thin.md)\n' > "$d/INDEX.md"
   assert_fails "check-index flags missing frontmatter keys" bash "$CHECK_INDEX" "$d"
+  rm -rf "$d"
+}
+
+test_check_index_catches_duplicate_row() {
+  local d; d="$(mktemp -d)"
+  printf -- '---\ntitle: t\ndimension: logic\nseverity: low\noccurrences: 1\nfirst_seen: 2026-01-01\nlast_seen: 2026-01-01\nsources: ["seed"]\nstatus: active\n---\nbody\n' > "$d/logic-dup.md"
+  printf '# Lessons index\n\n- [t](logic-dup.md)\n- [t again](logic-dup.md)\n' > "$d/INDEX.md"
+  assert_fails "check-index flags a lesson linked more than once" bash "$CHECK_INDEX" "$d"
   rm -rf "$d"
 }
 

@@ -75,7 +75,7 @@ charter and writes `findings.<model>.json`.
 After all reviewers complete:
 
 ```
-bash scripts/merge-findings.sh .reviews/<run-id> [--round N]
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/merge-findings.sh" .reviews/<run-id> [--round N]
 ```
 
 `merge-findings.sh` reads every `findings.*.json` in the run directory, deduplicates
@@ -91,13 +91,13 @@ address loop).
 To render findings as inline GitHub PR comments:
 
 ```
-bash scripts/post-to-pr.sh --dry-run .reviews/<run-id>/ledger.json <commit-sha>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/post-to-pr.sh" --dry-run .reviews/<run-id>/ledger.json <commit-sha>
 ```
 
 To POST to the GitHub API, run the live form with `<owner/repo>` and `<pr#>`:
 
 ```
-bash scripts/post-to-pr.sh .reviews/<run-id>/ledger.json <commit-sha> <owner/repo> <pr#>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/post-to-pr.sh" .reviews/<run-id>/ledger.json <commit-sha> <owner/repo> <pr#>
 ```
 
 `post-to-pr.sh` builds a structured payload (commit ref, file path, line, side, body
@@ -112,20 +112,28 @@ The loop is round-aware:
 **Round 1** (first pass):
 
 ```
-bash scripts/merge-findings.sh .reviews/<run-id> --round 1
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/merge-findings.sh" .reviews/<run-id> --round 1
 ```
 
 Produces `ledger.json` with every finding stamped `status: "open"`, `round: 1`.
 New findings get IDs in the scheme `r<round>-<n>` (e.g. `r1-1`, `r1-2`).
 
-**Between rounds — driver edits `ledger.json` in place:**
+**Between rounds — driver updates `ledger.json` (write-to-temp-then-rename):**
 
 - For each `high` or `medium` finding you fixed: set `status: "addressed"` and
   `resolution: "<what was done>"`.
 - For findings you will not fix: set `status: "wontfix"` and `resolution: "<rationale>"`.
   The rationale is synthesis signal — a wontfix with a weak rationale is a red flag.
 
-Do not re-run `merge-findings.sh` yet — edit the ledger first.
+Use write-to-temp-then-rename to update the ledger so a partial write never corrupts it:
+
+```bash
+jq 'map(if .id=="<id>" then .status="addressed" | .resolution="<note>" else . end)' \
+  .reviews/<run-id>/ledger.json > .reviews/<run-id>/ledger.json.tmp \
+  && mv .reviews/<run-id>/ledger.json.tmp .reviews/<run-id>/ledger.json
+```
+
+Do not re-run `merge-findings.sh` yet — update the ledger first.
 
 **Re-review (round N+1):**
 
@@ -134,7 +142,7 @@ Each reviewer re-examines the updated diff and **overwrites** their
 Then run:
 
 ```
-bash scripts/merge-findings.sh .reviews/<run-id> --round N+1
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/merge-findings.sh" .reviews/<run-id> --round N+1
 ```
 
 `merge-findings.sh` **reconciles** this round's incoming findings against the
@@ -270,7 +278,7 @@ auto-deleted after convergence — an explicit synthesis step reads `.reviews/*/
 ### `merge-findings.sh`
 
 ```
-bash scripts/merge-findings.sh <run-dir> [--round N]
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/merge-findings.sh" <run-dir> [--round N]
 ```
 
 - Reads all `findings.*.json` in `<run-dir>`.
@@ -282,11 +290,11 @@ bash scripts/merge-findings.sh <run-dir> [--round N]
 ### `post-to-pr.sh`
 
 ```
-bash scripts/post-to-pr.sh --dry-run <ledger-path> <commit-sha>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/post-to-pr.sh" --dry-run <ledger-path> <commit-sha>
 ```
 
 ```
-bash scripts/post-to-pr.sh <ledger-path> <commit-sha> <owner/repo> <pr#>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/review-changes/scripts/post-to-pr.sh" <ledger-path> <commit-sha> <owner/repo> <pr#>
 ```
 
 - `--dry-run` — prints the structured payload to stdout; does not POST.
